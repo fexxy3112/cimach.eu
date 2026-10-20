@@ -2,8 +2,9 @@ import { stdin, stdout } from 'node:process'
 import { createInterface } from 'node:readline/promises'
 import { StringDecoder } from 'node:string_decoder'
 import bcrypt from 'bcryptjs'
-import { pool } from '../src/database.js'
-import { ensureAuthSchema } from '../src/migrate.js'
+import { pool } from '../src/database/client.js'
+import { runMigrations } from '../src/database/migration-runner.js'
+import { createUserModel } from '../src/database/models/user.model.js'
 
 function promptHidden(prompt) {
   if (!stdin.isTTY || typeof stdin.setRawMode !== 'function') {
@@ -46,7 +47,7 @@ function promptHidden(prompt) {
 
 let prompt
 try {
-  await ensureAuthSchema(pool)
+  await runMigrations(pool)
   const rl = createInterface({ input: stdin, output: stdout })
   prompt = rl
   const email = (await rl.question('Administrator email: ')).trim().toLowerCase()
@@ -62,24 +63,20 @@ try {
     const [lockRows] = await connection.execute('SELECT GET_LOCK(?, 10) AS acquired', ['cimach-first-admin'])
     if (Number(lockRows[0].acquired) !== 1) throw new Error('Could not acquire administrator setup lock.')
 
-    const [existingAdmins] = await connection.execute("SELECT COUNT(*) AS count FROM users WHERE role = 'admin'")
-    if (Number(existingAdmins[0].count) > 0) {
+    const users = createUserModel(pool)
+    if (await users.countAdmins(connection) > 0) {
       throw new Error('An administrator already exists. This command only creates the first administrator.')
     }
 
-    const password = await promptHidden('Administrator password (minimum 15 characters): ')
+    const password = await promptHidden('Administrator password (minimum 8 characters): ')
     const confirmation = await promptHidden('Repeat password: ')
     if (password !== confirmation) throw new Error('Passwords do not match.')
-    if (password.length < 15 || Buffer.byteLength(password, 'utf8') > 72) {
-      throw new Error('Password must be at least 15 characters and no more than 72 UTF-8 bytes.')
+    if (password.length < 8 || Buffer.byteLength(password, 'utf8') > 72) {
+      throw new Error('Password must be at least 8 characters and no more than 72 UTF-8 bytes.')
     }
 
     const passwordHash = await bcrypt.hash(password, 12)
-    await connection.execute(
-      `INSERT INTO users (email, password_hash, role, is_active)
-       VALUES (?, ?, 'admin', 1)`,
-      [email, passwordHash],
-    )
+    await users.createAdmin({ email, passwordHash }, connection)
   } finally {
     try { await connection.execute('SELECT RELEASE_LOCK(?)', ['cimach-first-admin']) } catch { /* connection cleanup below */ }
     connection.release()

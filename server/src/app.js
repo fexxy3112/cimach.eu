@@ -4,11 +4,14 @@ import cors from 'cors'
 import express from 'express'
 import helmet from 'helmet'
 import { randomBytes } from 'node:crypto'
-import { createAdminRouter, createAuthRouter } from './auth/routes.js'
-import { requireSameOriginCsrf } from './auth/csrf.js'
+import { createAuthService } from './services/auth.service.js'
+import { requireSameOriginCsrf } from './middleware/csrf.middleware.js'
+import { errorHandler, notFound } from './middleware/error.middleware.js'
+import { createApiRouter } from './routes/index.js'
 
 export async function createApp({ pool, config, dummyPasswordHash }) {
   const fallbackHash = dummyPasswordHash || await bcrypt.hash(randomBytes(32).toString('hex'), 12)
+  const authService = createAuthService({ pool, config, dummyPasswordHash: fallbackHash })
   const app = express()
 
   app.disable('x-powered-by')
@@ -32,16 +35,9 @@ export async function createApp({ pool, config, dummyPasswordHash }) {
   })
   app.use('/api', requireSameOriginCsrf(config.frontendOrigin))
 
-  app.get('/api/healthz', (_req, res) => res.status(200).json({ status: 'ok' }))
-  app.use('/api', createAuthRouter({ pool, config, dummyPasswordHash: fallbackHash }))
-  app.use('/api/admin', createAdminRouter({ pool, config }))
-
-  app.use((error, _req, res, _next) => {
-    if (res.headersSent) return
-    if (error?.type === 'entity.too.large') return res.status(413).json({ error: 'request_too_large' })
-    if (error?.type === 'entity.parse.failed') return res.status(400).json({ error: 'invalid_request' })
-    return res.status(500).json({ error: 'internal_error' })
-  })
+  app.use('/api', createApiRouter({ authService, config }))
+  app.use('/api', notFound)
+  app.use(errorHandler)
 
   return app
 }

@@ -21,7 +21,7 @@ export function HeroSection() {
       <Reveal className="hero-bottom">
         <p>{hero.description}</p>
         <a className="round-link" href="#work" aria-label={locale === 'pl' ? 'Przejdź do projektów' : 'Go to projects'} draggable={false}>
-          <svg className="nodrag" aria-hidden="true" viewBox="0 0 24 24" fill="none" draggable={false}>
+          <svg className="nodrag" aria-hidden="true" viewBox="0 0 24 24" fill="none">
             <path d="M12 4v15m0 0 6-6m-6 6-6-6" />
           </svg>
         </a>

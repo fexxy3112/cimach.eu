@@ -27,22 +27,17 @@ const frontendOrigin = parseOrigin(required('FRONTEND_ORIGIN'), 'FRONTEND_ORIGIN
 if (nodeEnv === 'production' && !frontendOrigin.startsWith('https://')) {
   throw new Error('FRONTEND_ORIGIN must use HTTPS in production')
 }
+
 const jwtSecretBase64 = required('JWT_SECRET_BASE64')
 const jwtSecret = Buffer.from(jwtSecretBase64, 'base64')
-
 if (jwtSecret.length < 32 || jwtSecret.toString('base64').replace(/=+$/, '') !== jwtSecretBase64.replace(/=+$/, '')) {
   throw new Error('JWT_SECRET_BASE64 must be canonical base64 containing at least 32 random bytes')
 }
 
 const sameSite = (process.env.AUTH_COOKIE_SAME_SITE || 'strict').toLowerCase()
-if (!['strict', 'lax', 'none'].includes(sameSite)) {
-  throw new Error('AUTH_COOKIE_SAME_SITE must be strict, lax, or none')
-}
-
+if (!['strict', 'lax', 'none'].includes(sameSite)) throw new Error('AUTH_COOKIE_SAME_SITE must be strict, lax, or none')
 const cookieSecure = nodeEnv === 'production'
-if (sameSite === 'none' && !cookieSecure) {
-  throw new Error('AUTH_COOKIE_SAME_SITE=none requires NODE_ENV=production and HTTPS')
-}
+if (sameSite === 'none' && !cookieSecure) throw new Error('AUTH_COOKIE_SAME_SITE=none requires production HTTPS')
 
 const port = Number(process.env.PORT || 3001)
 const dbPort = Number(process.env.DB_PORT || 3306)
@@ -55,16 +50,11 @@ if (!Number.isInteger(dbPort) || dbPort < 1 || dbPort > 65535) throw new Error('
 if (!Number.isInteger(accessTtlSeconds) || accessTtlSeconds < 60 || accessTtlSeconds > 900) {
   throw new Error('JWT_ACCESS_TTL_SECONDS must be between 60 and 900')
 }
-if (!Number.isInteger(connectionLimit) || connectionLimit < 1 || connectionLimit > 50) {
-  throw new Error('DB_CONNECTION_LIMIT must be between 1 and 50')
-}
+if (!Number.isInteger(connectionLimit) || connectionLimit < 1 || connectionLimit > 50) throw new Error('DB_CONNECTION_LIMIT is invalid')
 if (!/^[A-Za-z0-9_-]{1,64}$/.test(cookieName)) throw new Error('AUTH_COOKIE_NAME is invalid')
 if (cookieDomain && !/^\.?[a-z0-9.-]+$/i.test(cookieDomain)) throw new Error('AUTH_COOKIE_DOMAIN is invalid')
 
-const trustProxyCidrs = (process.env.TRUST_PROXY_CIDRS || '')
-  .split(',')
-  .map((cidr) => cidr.trim())
-  .filter(Boolean)
+const trustProxyCidrs = (process.env.TRUST_PROXY_CIDRS || '').split(',').map((value) => value.trim()).filter(Boolean)
 if (nodeEnv === 'production' && trustProxyCidrs.length === 0) {
   throw new Error('Set TRUST_PROXY_CIDRS to the exact trusted reverse-proxy address or subnet in production')
 }

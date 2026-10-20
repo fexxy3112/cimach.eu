@@ -1,30 +1,66 @@
-# CIMACH authentication API
+# CIMACH CMS API
 
-This is a separate Express application in `/server`. It serves the API on `127.0.0.1:3001`; Vite proxies `/api` locally and Apache can proxy `/api` in production. The browser keeps the short-lived HS256 access JWT only in an HttpOnly cookie. Each protected request checks both the JWT and its server-side session row, so logout revokes a token immediately. There is no refresh token or public registration.
+Express API for the existing CIMACH React/Vite application. The public portfolio and its `/pl/login` and `/en/login` routes are unchanged; login calls the existing auth endpoints. API paths remain `/api/auth/login`, `/api/auth/me`, `/api/auth/logout`, `/api/admin`, and `/api/healthz`.
+
+## Structure
+
+```text
+server/
+  migrations/                 Versioned, additive MySQL migrations
+  scripts/                    Migration and administrator CLI entrypoints
+  src/
+    config/env.js              Validated environment configuration
+    database/client.js         mysql2 connection pool
+    database/models/            Parameterized user and session queries
+    routes/                     API route registration and auth routes
+    controllers/                HTTP request/response handling
+    services/                   Authentication business logic
+    middleware/                 Auth, CSRF, rate limiting, errors
+    validators/                 Request validation
+    utils/                      JWT and cookie helpers
+    app.js                      Express middleware and router setup
+    index.js                    Database probe and server startup
+  test/
+```
+
+The project does not currently use an ORM. The auth schema is small and already uses parameterized `mysql2` queries, so introducing Prisma would add a second schema/migration model and require an unverified database conversion. The model layer keeps SQL out of HTTP handlers while retaining the existing database and API contract. Future `Project`, `ProjectImage`, and `Category` models can follow the same pattern when those features are implemented.
 
 ## Local setup
 
-1. Copy `.env.example` to `.env`, set database connection values, then create a random JWT key:
+1. Create `server/.env` with the configuration variables listed below and set the local database values. Generate a fresh JWT secret without putting it in a command argument or source file:
 
    ```powershell
-   node -e "console.log(require('node:crypto').randomBytes(64).toString('base64'))"
+   node -e "process.stdout.write(require('node:crypto').randomBytes(64).toString('base64') + '\n')"
    ```
 
-2. Install dependencies with `npm install` in this directory.
-3. Run `npm run db:migrate`.
-4. Run `npm run admin:create` in an interactive terminal. The password is entered with masked characters, confirmed, hashed with bcrypt, and never accepted as a command-line argument.
-5. Start the API with `npm run dev`. Start the frontend separately in `/app`.
+2. From `server/`, install dependencies with `npm ci`.
+3. Run `npm run db:migrate` to apply pending versioned migrations.
+4. Run `npm run admin:create` in an interactive terminal. It asks for an email and hidden password, hashes it with bcrypt, and creates only the first administrator.
+5. Run `npm run dev` from `server/`; start the Vite frontend separately from `app/`.
 
-The migration uses an existing `users` table only if it has the supported `id`, `email`, `password_hash`, `role`, and `is_active` schema, with a unique email key and a compatible integer ID. It stops without modifying that table when it is incompatible. If no users table exists, it creates one. `auth_sessions` stores session ID, user ID, expiry, and revocation time; it never stores JWTs.
+## Database and migrations
 
-## Production requirements
+`mysql2/promise` is the only database access layer. `schema_migrations` records each version in `migrations/`; `npm run db:migrate` is the single migration entrypoint. A database lock prevents concurrent migration runs. MySQL DDL implicitly commits, so migrations are written to be safely retryable rather than relying on a transaction around DDL.
 
-- Set `NODE_ENV=production`, use HTTPS, set `FRONTEND_ORIGIN=https://cimach.eu`, and provide all `DB_*` values plus a fresh `JWT_SECRET_BASE64` with at least 32 random bytes. Do not use the checked-in example values or the frontend's `app/.env` as an API secret store.
-- Run the Node process under a service manager and keep port 3001 bound to localhost. The Apache proxy rule in `app/public/.htaccess` requires `mod_rewrite`, `mod_proxy`, and `mod_proxy_http`. Confirm those modules and Node hosting are available with the hosting provider before deployment.
-- The default cookie is host-only, HttpOnly, Secure in production, SameSite=Strict, and scoped to `/api`. If the API is moved to another site, update the exact `FRONTEND_ORIGIN`, frontend `VITE_API_BASE_URL`, CORS, cookie SameSite/Secure, and browser credentials together. Cross-site cookies may be blocked by browser privacy settings.
-- In production, `TRUST_PROXY_CIDRS` is required because this server binds to loopback behind a proxy. For same-host Apache, use `127.0.0.1/32,::1/128`; otherwise configure only the actual proxy address/subnet. Never set trust proxy to `true` just to make IP detection work.
-- Login rate limiting is 5 unsuccessful requests per IP per 15 minutes. The default in-memory store is appropriate only for a single API process; multiple instances need a shared express-rate-limit store before deployment.
-- The API checks an exact `Origin` and a custom `X-CIMACH-CSRF: 1` header on every state-changing `/api` request. CORS allows credentials only from the configured frontend origin.
-- `GET /api/admin` is a protected foundation endpoint and requires the `admin` role. Future CMS routes must be mounted behind the same `authenticate` and role middleware. The React `/pl/admin` and `/en/admin` guard is only UI behavior.
+`001-auth-schema.js` creates `users` and `auth_sessions` only when absent. If a `users` table already exists, it validates the columns, key, and types required by auth, then adds `created_at`/`updated_at` if missing. Those timestamp additions are non-destructive. An incompatible schema stops the migration with an error; it does not drop or reset tables. Existing users are preserved. The migration can be rerun after a partial DDL failure.
 
-No production database connection or hosting topology was available in the project during implementation. Run the migration against the intended database only after confirming its schema and taking the usual database backup. The migration's checks are deliberately fail-closed.
+Before running migrations on production, take a database backup and inspect the target schema. Production schema compatibility was not verifiable from this repository. Apply the same command in a controlled deployment step:
+
+```sh
+cd server && npm ci && npm run db:migrate
+```
+
+## Authentication and API
+
+- Login uses bcrypt comparison and the same `401 invalid_credentials` response for unknown accounts and incorrect passwords. There is no public registration.
+- JWTs use HS256 and a short configured lifetime. The browser receives the token only in an HttpOnly cookie. A database session row is checked for every protected request and marked revoked on logout.
+- State-changing API requests require the configured exact `Origin` and `X-CIMACH-CSRF: 1`. CORS permits credentials only for `FRONTEND_ORIGIN`.
+- Login is limited to five unsuccessful attempts per IP per 15 minutes. The default rate-limit store is in process and therefore only coordinates a single API instance. Use a shared express-rate-limit store before running multiple instances.
+- `GET /api/admin` is an authenticated admin-only foundation endpoint. Mount future CMS endpoints behind `createAuthenticate` and the appropriate role check; frontend route guards are not authorization.
+- The API binds to `127.0.0.1`. Apache deployment requires working `mod_rewrite`, `mod_proxy`, and `mod_proxy_http` rules for `/api`, plus `TRUST_PROXY_CIDRS` set to the actual proxy addresses. Do not set trust proxy to `true` indiscriminately.
+
+## Environment
+
+Required variables are `NODE_ENV`, `PORT`, `FRONTEND_ORIGIN`, `JWT_SECRET_BASE64`, `JWT_ISSUER`, `JWT_AUDIENCE`, `JWT_ACCESS_TTL_SECONDS`, `DB_HOST`, `DB_PORT`, `DB_DATABASE`, `DB_USERNAME`, `DB_PASSWORD`, `DB_CONNECTION_LIMIT`, `TRUST_PROXY_CIDRS`, `AUTH_COOKIE_NAME`, `AUTH_COOKIE_SAME_SITE`, and `AUTH_COOKIE_DOMAIN`. For local Vite, use `NODE_ENV=development`, `FRONTEND_ORIGIN=http://localhost:5173`, `PORT=3001`, and a local MySQL connection. Generate at least 32 random bytes for `JWT_SECRET_BASE64`. Production additionally requires HTTPS for `FRONTEND_ORIGIN` and explicit `TRUST_PROXY_CIDRS`. `.env` and `.env.example` are ignored by Git in this repository because a filled example file previously exposed credentials; do not force-add them.
+
+Useful scripts: `npm run dev`, `npm start`, `npm test`, `npm run db:migrate`, and `npm run admin:create`.

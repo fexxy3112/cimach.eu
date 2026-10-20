@@ -1,6 +1,6 @@
 import { createApp } from './app.js'
-import { config } from './config.js'
-import { pool } from './database.js'
+import { config } from './config/env.js'
+import { pool } from './database/client.js'
 
 try {
   await pool.query('SELECT 1')
