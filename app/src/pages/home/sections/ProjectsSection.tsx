@@ -1,16 +1,13 @@
-import { getPortfolio, type PortfolioProject } from '../../../data/portfolio'
+import type { PublicProject } from '../../../data/projectApi'
+import { getPortfolio } from '../../../data/portfolio'
 import { useLocale } from '../../../i18n/LocaleContext'
 import { Reveal } from '../../../components/Reveal'
 import { SectionHeading } from '../../../components/SectionHeading'
 import { ArrowUpRight } from '../../../components/ArrowUpRight'
 import type { Locale } from '../../../i18n/LocaleContext'
 
-function ProjectRow({ project, locale }: { project: PortfolioProject; locale: Locale }) {
-  const href = project.caseStudySlug
-    ? `/${locale}/projects/${project.caseStudySlug}/`
-    : project.href
-  return (
-    <Reveal as="a" className="work-item" href={href} target={href.startsWith('http') ? '_blank' : undefined} rel="noreferrer" draggable={false}>
+function ProjectRow({ project, locale }: { project: PublicProject; locale: Locale }) {
+  const content = <>
       <span className="work-num">{project.number}</span>
       <div className="work-name">
         <h3>{project.name}</h3>
@@ -18,15 +15,20 @@ function ProjectRow({ project, locale }: { project: PortfolioProject; locale: Lo
       </div>
       <p>{project.description}</p>
       <div className="tags">{project.technologies.map((technology) => <span key={technology}>{technology}</span>)}</div>
-      <span className="work-arrow"><ArrowUpRight /></span>
-    </Reveal>
-  )
+      {project.caseStudySlug && <span className="work-arrow"><ArrowUpRight /></span>}
+    </>
+  return project.caseStudySlug
+    ? <Reveal as="a" className="work-item" href={`/${locale}/projects/${encodeURIComponent(project.caseStudySlug)}/`} draggable={false}>{content}</Reveal>
+    : <Reveal as="div" className="work-item" aria-disabled="true">{content}</Reveal>
 }
 
-export function ProjectsSection() {
+export function ProjectsSection({ projects, loading, error }: {
+  projects: PublicProject[]
+  loading: boolean
+  error: boolean
+}) {
   const locale = useLocale()
-  const portfolio = getPortfolio(locale)
-  const intro = portfolio.projectsIntro
+  const intro = getPortfolio(locale).projectsIntro
 
   return (
     <section id="work" className="section work" aria-labelledby="work-title">
@@ -35,7 +37,11 @@ export function ProjectsSection() {
         <h2 id="work-title">{intro.title}<br /><em>{intro.accent}</em></h2>
         <p>{intro.description}</p>
       </Reveal>
-      <div className="work-list">{portfolio.projects.map((project) => <ProjectRow key={project.number} project={project} locale={locale} />)}</div>
+      <div className="work-list" aria-busy={loading}>
+        {projects.map((project) => <ProjectRow key={project.number} project={project} locale={locale} />)}
+        {loading && <p role="status">{locale === 'pl' ? 'Ładowanie projektów…' : 'Loading projects…'}</p>}
+        {error && <p role="alert">{locale === 'pl' ? 'Nie udało się pobrać projektów.' : 'Projects could not be loaded.'}</p>}
+      </div>
     </section>
   )
 }

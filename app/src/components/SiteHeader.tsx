@@ -1,15 +1,19 @@
 import { useState } from 'react'
 import { getPortfolio } from '../data/portfolio'
-import { useLocale } from '../i18n/LocaleContext'
+import { useLocale, type Locale } from '../i18n/LocaleContext'
 import type { SeoPage } from '../seo'
 
-export function SiteHeader({ activePage }: { activePage: SeoPage }) {
+export function SiteHeader({ activePage, projectSlug, projectLocales }: {
+  activePage: SeoPage
+  projectSlug?: string
+  projectLocales?: Locale[]
+}) {
   const [isMenuOpen, setIsMenuOpen] = useState(false)
   const locale = useLocale()
   const portfolio = getPortfolio(locale)
   const homePath = `/${locale}/`
-  const languagePath = (nextLocale: 'pl' | 'en') => activePage === 'studioBodyArt'
-    ? `/${nextLocale}/projects/studio-bodyart/`
+  const languagePath = (nextLocale: 'pl' | 'en') => activePage === 'project' && projectSlug && projectLocales?.includes(nextLocale)
+    ? `/${nextLocale}/projects/${projectSlug}/`
     : `/${nextLocale}/`
   const copy = locale === 'pl'
     ? { nav: ['Projekty', 'O mnie', 'Fotografia', 'Kontakt'], navLabel: 'Nawigacja główna', theme: 'Zmień motyw', close: 'Zamknij menu', open: 'Otwórz menu', switchLanguage: 'Zmień język' }

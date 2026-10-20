@@ -5,6 +5,12 @@ import React from 'react'
 import { renderToString } from 'react-dom/server'
 
 const escapeHtml = (value) => value.replaceAll('&', '&amp;').replaceAll('"', '&quot;').replaceAll('<', '&lt;').replaceAll('>', '&gt;')
+const serializeJsonForHtml = (value) => JSON.stringify(value)
+  .replaceAll('<', '\\u003c')
+  .replaceAll('>', '\\u003e')
+  .replaceAll('&', '\\u0026')
+  .replaceAll('\u2028', '\\u2028')
+  .replaceAll('\u2029', '\\u2029')
 
 function prerenderPages() {
   return {
@@ -22,11 +28,38 @@ function prerenderPages() {
       try {
         const { default: App } = await server.ssrLoadModule('/src/app/App.tsx')
         const { getSeo } = await server.ssrLoadModule('/src/seo.ts')
+        const { generateSitemap } = await server.ssrLoadModule('/src/sitemap.js')
+        const { loadPublicProjectCatalog, loadPublicProjectPage } = await server.ssrLoadModule('/src/data/projectApi.ts')
+        const apiBase = process.env.CIMACH_API_BASE_URL || 'http://127.0.0.1:3001/api'
         const template = await readFile('dist/index.html', 'utf8')
+        const catalogs = {
+          pl: await loadPublicProjectCatalog('pl', apiBase),
+          en: await loadPublicProjectCatalog('en', apiBase),
+        }
 
         for (const locale of ['pl', 'en']) {
-          for (const pageName of ['home', 'studioBodyArt', 'login', 'admin']) {
-            const page = getSeo(locale, pageName)
+          const pages = [{ name: 'home' }]
+          for (const project of catalogs[locale].projects) {
+            const slug = project.caseStudySlug
+            if (!slug) continue
+            if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug)) {
+              throw new Error(`Invalid published project slug for prerendering: ${slug}`)
+            }
+            const availableLocales = ['pl', 'en'].filter((candidateLocale) =>
+              catalogs[candidateLocale].projects.some((candidate) => candidate.caseStudySlug === slug),
+            )
+            const projectPage = await loadPublicProjectPage(locale, slug, apiBase, fetch, undefined, availableLocales)
+            if (!projectPage) throw new Error(`Published project detail is missing from the ${locale} API response for slug: ${slug}`)
+            pages.push({ name: 'project', slug, project: projectPage.project, projectPage })
+          }
+          pages.push({ name: 'login' }, { name: 'admin' })
+
+          for (const route of pages) {
+            const pageName = route.name
+            const project = route.project
+            const pageData = pageName === 'home' ? catalogs[locale] : route.projectPage
+            const projectLocales = route.projectPage?.availableLocales
+            const page = getSeo(locale, pageName, project, route.slug, projectLocales)
             const isHome = pageName === 'home'
             const isPrivatePage = pageName === 'login' || pageName === 'admin'
             const structuredData = isPrivatePage ? null : isHome
@@ -42,11 +75,17 @@ function prerenderPages() {
               : {
                   '@context': 'https://schema.org',
                   '@type': 'CreativeWork',
-                  name: 'Studio BodyArt',
+                  name: project.name,
                   url: page.canonical,
+                  description: page.description,
                   creator: { '@type': 'Person', name: 'Mateusz Cimachowski' },
                 }
-            const markup = renderToString(React.createElement(App, { initialLocale: locale, initialPage: pageName }))
+            const markup = renderToString(React.createElement(App, {
+              initialLocale: locale,
+              initialPage: pageName,
+              initialProjectSlug: route.slug,
+              initialData: pageData,
+            }))
             const title = escapeHtml(page.title)
             const description = escapeHtml(page.description)
             const canonical = escapeHtml(page.canonical)
@@ -56,19 +95,30 @@ function prerenderPages() {
               .replaceAll('content="__SEO_DESCRIPTION__"', `content="${description}"`)
               .replace('href="__SEO_CANONICAL__"', `href="${canonical}"`)
               .replaceAll('content="__SEO_CANONICAL__"', `content="${canonical}"`)
-              .replace('href="__SEO_PL_ALTERNATE__"', `href="${page.alternatePl}"`)
-              .replace('href="__SEO_EN_ALTERNATE__"', `href="${page.alternateEn}"`)
+              .replace('<link rel="alternate" hreflang="pl" href="__SEO_PL_ALTERNATE__" />', page.alternatePl
+                ? `<link rel="alternate" hreflang="pl" href="${page.alternatePl}" />`
+                : '')
+              .replace('<link rel="alternate" hreflang="en" href="__SEO_EN_ALTERNATE__" />', page.alternateEn
+                ? `<link rel="alternate" hreflang="en" href="${page.alternateEn}" />`
+                : '')
+              .replace('<link rel="alternate" hreflang="x-default" href="__SEO_PL_ALTERNATE__" />', page.xDefault
+                ? `<link rel="alternate" hreflang="x-default" href="${page.xDefault}" />`
+                : '')
               .replace('content="__OG_LOCALE__"', `content="${page.ogLocale}"`)
               .replaceAll('content="__SEO_TITLE__"', `content="${title}"`)
               .replace('<title>__SEO_TITLE__</title>', `<title>${title}</title>`)
-              .replace('<div id="root"></div>', `<div id="root">${markup}</div>`)
-              .replace('</head>', `${structuredData ? `<script type="application/ld+json">${JSON.stringify(structuredData)}</script>\n  ` : ''}</head>`)
+              .replace('<div id="root"></div>', `<div id="root">${markup}</div>${pageData
+                ? `<script id="cimach-prerender-data" type="application/json">${serializeJsonForHtml(pageData)}</script>`
+                : ''}`)
+              .replace('</head>', `${structuredData ? `<script type="application/ld+json">${serializeJsonForHtml(structuredData)}</script>\n  ` : ''}</head>`)
 
             await mkdir(`dist${page.path}`, { recursive: true })
             await writeFile(`dist${page.path}index.html`, html)
             if (locale === 'pl' && isHome) await writeFile('dist/index.html', html)
           }
         }
+
+        await writeFile('dist/sitemap.xml', generateSitemap(catalogs, getSeo))
       } finally {
         await server.close()
       }

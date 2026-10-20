@@ -6,12 +6,14 @@ Express API for the existing CIMACH React/Vite application. The public portfolio
 
 ```text
 server/
+  data/legacy-projects.json    Verified snapshot of the existing React project data
   migrations/                 Versioned, additive MySQL migrations
-  scripts/                    Migration and administrator CLI entrypoints
+  scripts/                    Migration, import, and administrator CLI entrypoints
   src/
     config/env.js              Validated environment configuration
     database/client.js         mysql2 connection pool
     database/models/            Parameterized user and session queries
+    database/models/project.model.js
     routes/                     API route registration and auth routes
     controllers/                HTTP request/response handling
     services/                   Authentication business logic
@@ -63,4 +65,27 @@ cd server && npm ci && npm run db:migrate
 
 Required variables are `NODE_ENV`, `PORT`, `FRONTEND_ORIGIN`, `JWT_SECRET_BASE64`, `JWT_ISSUER`, `JWT_AUDIENCE`, `JWT_ACCESS_TTL_SECONDS`, `DB_HOST`, `DB_PORT`, `DB_DATABASE`, `DB_USERNAME`, `DB_PASSWORD`, `DB_CONNECTION_LIMIT`, `TRUST_PROXY_CIDRS`, `AUTH_COOKIE_NAME`, `AUTH_COOKIE_SAME_SITE`, and `AUTH_COOKIE_DOMAIN`. For local Vite, use `NODE_ENV=development`, `FRONTEND_ORIGIN=http://localhost:5173`, `PORT=3001`, and a local MySQL connection. Generate at least 32 random bytes for `JWT_SECRET_BASE64`. Production additionally requires HTTPS for `FRONTEND_ORIGIN` and explicit `TRUST_PROXY_CIDRS`. `.env` and `.env.example` are ignored by Git in this repository because a filled example file previously exposed credentials; do not force-add them.
 
-Useful scripts: `npm run dev`, `npm start`, `npm test`, `npm run db:migrate`, and `npm run admin:create`.
+## Projects data migration
+
+The current public data contains three active project entries in the same order in `app/src/data/portfolio.ts` and `portfolio-en.ts`: CIMACH, Studio BodyArt, and Experiments. The visible `03` block is commented out and is not imported. Studio BodyArt has the only current case-study slug (`studio-bodyart`) and three remote gallery images in `app/src/data/project-previews.ts`. No project has a main-image reference. Project-specific SEO exists only for Studio BodyArt in `app/src/seo.ts` and is included in the import snapshot.
+
+`data/legacy-projects.json` is a generated import snapshot. Run `npm run projects:snapshot` from `server/` to rebuild it from the current TypeScript/SEO sources (requires the app dependencies to be installed), then review the diff. The importer verifies SHA-256 hashes of those source files before using the snapshot. Source files are never rewritten by the importer.
+
+The additive `002-project-catalog` migration creates `projects`, `project_translations`, `project_technologies`, and `project_images`. Existing localized title, category, description, SEO, and technology values are retained separately per locale. Existing external project URLs and the Studio BodyArt route slug are preserved. Legacy projects are published because they are currently public; their historical publication dates and main-image references are absent, so `published_at` and `main_image_url` remain `NULL`. `created_at` and `updated_at` use the database import time.
+
+After verifying database access and reviewing a backup, run:
+
+```sh
+npm run db:migrate
+npm run projects:import -- --source-only  # validates snapshot/source fingerprints without a database
+npm run projects:import                   # read-only database dry run; SELECT queries only
+npm run projects:import -- --apply        # inserts missing records in one transaction
+```
+
+The importer uses stable `source_key` values and never updates an already imported record, so reruns do not duplicate or overwrite later CMS edits. It reports valid, skipped, already imported, and inserted records. The `--apply` mode aborts if source records are invalid. Review dry-run counts and source details before applying.
+
+Public endpoints are `GET /api/projects?locale=pl|en` and `GET /api/projects/:slug?locale=pl|en`. They return only `published` projects, map to the current card/detail fields, and omit internal IDs and source keys. No administrative project write endpoints are included yet.
+
+The frontend remains connected to the static React data. Its Vite plugin prerenders pages and project SEO into HTML, and the live database was unavailable during this work. Do not switch the frontend to runtime-only API fetching: first run the migration/import, compare all records and images, then add database-backed prerendering for the existing route and future case studies. The current project count and URL behavior should be checked against the database before that switch.
+
+Useful scripts: `npm run dev`, `npm start`, `npm test`, `npm run db:migrate`, `npm run projects:import`, and `npm run admin:create`.

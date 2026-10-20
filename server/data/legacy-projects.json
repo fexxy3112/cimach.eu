@@ -1,0 +1,129 @@
+{
+  "sourceFiles": {
+    "app/src/data/portfolio.ts": "C92A11E28F6A852F6675F24C41778B3FDBEF407C1D6A7B174431612EE330CA08",
+    "app/src/data/portfolio-en.ts": "2C40FF7B9FE3C14D9DCA60FE98EBCFCEC6FECF2CF63E7334C8DA1C9C68E3FE49",
+    "app/src/data/project-previews.ts": "09E7C245825928AE5EC3DED3FE2BD635EED7FE0FB428907F38A9C9B9540D4120",
+    "app/src/seo.ts": "0351F11AE5F9491CD96ACD6A4C7855D4FB74025889CFF3FD09B54406390CE86B"
+  },
+  "projects": [
+    {
+      "number": "01",
+      "slug": null,
+      "href": "https://cimach.eu",
+      "mainImage": null,
+      "translations": {
+        "pl": {
+          "name": "cimach.eu",
+          "category": "Personal portfolio / Full-stack",
+          "description": "Własna strona z panelem do zarządzania projektami, zdjęciami i treścią.",
+          "technologies": [
+            "REACT",
+            "NODE.JS",
+            "MARIADB"
+          ],
+          "seoTitle": null,
+          "seoDescription": null
+        },
+        "en": {
+          "name": "cimach.eu",
+          "category": "Personal portfolio / Full-stack",
+          "description": "A personal website with a panel for managing projects, photos and content.",
+          "technologies": [
+            "REACT",
+            "NODE.JS",
+            "MARIADB"
+          ],
+          "seoTitle": null,
+          "seoDescription": null
+        }
+      },
+      "images": []
+    },
+    {
+      "number": "02",
+      "slug": "studio-bodyart",
+      "href": "https://michalowice.studio-bodyart.pl",
+      "mainImage": null,
+      "translations": {
+        "pl": {
+          "name": "Studio BodyArt",
+          "category": "Business website",
+          "description": "Strona usługowa z naciskiem na responsywność i widoczność w wyszukiwarkach.",
+          "technologies": [
+            "PHP",
+            "SCSS",
+            "JS"
+          ],
+          "seoTitle": "Studio BodyArt - projekt | CIMACH",
+          "seoDescription": "Strona usługowa Studio BodyArt, przygotowana z naciskiem na responsywność i widoczność w wyszukiwarkach."
+        },
+        "en": {
+          "name": "Studio BodyArt",
+          "category": "Business website",
+          "description": "A service website focused on responsive design and search visibility.",
+          "technologies": [
+            "PHP",
+            "SCSS",
+            "JS"
+          ],
+          "seoTitle": "Studio BodyArt - project | CIMACH",
+          "seoDescription": "A Studio BodyArt service website focused on responsive design and search visibility."
+        }
+      },
+      "images": [
+        {
+          "src": "https://michalowice.studio-bodyart.pl/public/images/studio/DSC_0770-scaled-e1743060822304.jpg",
+          "alt": {
+            "pl": "Wnętrze studia BodyArt",
+            "en": "Interior of the BodyArt studio"
+          }
+        },
+        {
+          "src": "https://michalowice.studio-bodyart.pl/public/images/studio/DSC_0817-scaled.jpg",
+          "alt": {
+            "pl": "Wnętrze studia BodyArt",
+            "en": "Interior of the BodyArt studio"
+          }
+        },
+        {
+          "src": "https://michalowice.studio-bodyart.pl/public/images/studio/DSC_1734-scaled.jpg",
+          "alt": {
+            "pl": "Wnętrze studia BodyArt",
+            "en": "Interior of the BodyArt studio"
+          }
+        }
+      ]
+    },
+    {
+      "number": "04",
+      "slug": null,
+      "href": "https://github.com/fexxy3112",
+      "mainImage": null,
+      "translations": {
+        "pl": {
+          "name": "Experiments",
+          "category": "GitHub / Side projects",
+          "description": "Mniejsze projekty, automatyzacje i pomysły, które sprawdzam w praktyce.",
+          "technologies": [
+            "REACT",
+            "JAVASCRIPT"
+          ],
+          "seoTitle": null,
+          "seoDescription": null
+        },
+        "en": {
+          "name": "Experiments",
+          "category": "GitHub / Side projects",
+          "description": "Small projects, automations and ideas I put into practice.",
+          "technologies": [
+            "REACT",
+            "JAVASCRIPT"
+          ],
+          "seoTitle": null,
+          "seoDescription": null
+        }
+      },
+      "images": []
+    }
+  ]
+}

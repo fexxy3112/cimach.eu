@@ -9,6 +9,8 @@
     "start": "node src/index.js",
     "dev": "node --watch src/index.js",
     "db:migrate": "node scripts/migrate.js",
+    "projects:snapshot": "node scripts/refresh-project-snapshot.js",
+    "projects:import": "node scripts/import-projects.js",
     "admin:create": "node scripts/create-admin.js",
     "test": "node --test"
   },

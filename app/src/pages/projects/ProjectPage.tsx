@@ -1,18 +1,24 @@
 import { useEffect, useRef, useState } from 'react'
-import { getPortfolio } from '../../data/portfolio'
-import { studioBodyArtPreviews } from '../../data/project-previews'
+import type { PublicProjectDetail } from '../../data/projectApi'
 import { useLocale } from '../../i18n/LocaleContext'
 import { ArrowUpRight } from '../../components/ArrowUpRight'
-import './StudioBodyArtPage.scss'
+import './ProjectPage.scss'
 
-export function StudioBodyArtPage() {
+export function ProjectPage({ project, loading, error, notFound }: {
+  project: PublicProjectDetail | null
+  loading: boolean
+  error: boolean
+  notFound: boolean
+}) {
   const locale = useLocale()
   const dialogRef = useRef<HTMLDialogElement>(null)
   const backRef = useRef<HTMLAnchorElement>(null)
   const titleSectionRef = useRef<HTMLElement>(null)
   const [selectedPreviewIndex, setSelectedPreviewIndex] = useState<number | null>(null)
   const [isBackCompact, setIsBackCompact] = useState(false)
-  const project = getPortfolio(locale).projects.find(({ caseStudySlug }) => caseStudySlug === 'studio-bodyart')
+  const previews = project
+    ? project.gallery.length ? project.gallery : project.mainImage ? [{ src: project.mainImage, alt: project.name }] : []
+    : []
 
   useEffect(() => {
     const titleSection = titleSectionRef.current
@@ -46,13 +52,36 @@ export function StudioBodyArtPage() {
     }
   }, [])
 
-  if (!project) return null
+  if (!project) {
+    if (notFound) {
+      const copy = locale === 'pl'
+        ? { title: 'Nie znaleziono projektu.', back: 'POWRÓT DO PROJEKTÓW' }
+        : { title: 'Project not found.', back: 'BACK TO SELECTED WORK' }
+      return (
+        <main className="site-main project-detail">
+          <a className="project-detail__back" href={`/${locale}/#work`}>
+            <svg aria-hidden="true" viewBox="0 0 24 24" fill="none"><path d="M19 12H5m0 0 7-7m-7 7 7 7" /></svg>
+            <span>{copy.back}</span>
+          </a>
+          <section className="project-detail__hero" aria-labelledby="project-title">
+            <p className="eyebrow">404</p>
+            <h1 id="project-title">{copy.title}</h1>
+          </section>
+        </main>
+      )
+    }
+    const message = error
+      ? locale === 'pl' ? 'Nie udało się pobrać projektu.' : 'Project could not be loaded.'
+      : loading ? locale === 'pl' ? 'Ładowanie projektu…' : 'Loading project…' : null
+    if (!message) return null
+    return <main className="site-main project-detail"><p role={error ? 'alert' : 'status'}>{message}</p></main>
+  }
 
   const copy = locale === 'pl'
-    ? { back: 'POWRÓT DO PROJEKTÓW', eyebrow: 'PROJEKT / 02', overview: 'O projekcie', previews: 'Podgląd zdjęć', technologies: 'Technologie', visit: 'Odwiedź stronę projektu', close: 'Zamknij podgląd zdjęcia', previous: 'Poprzednie zdjęcie', next: 'Następne zdjęcie', photo: 'Zdjęcie' }
-    : { back: 'BACK TO SELECTED WORK', eyebrow: 'PROJECT / 02', overview: 'Overview', previews: 'Photo previews', technologies: 'Technologies', visit: 'Visit the live project', close: 'Close photo preview', previous: 'Previous photo', next: 'Next photo', photo: 'Photo' }
+    ? { back: 'POWRÓT DO PROJEKTÓW', eyebrow: `PROJEKT / ${project.number}`, overview: 'O projekcie', previews: 'Podgląd zdjęć', technologies: 'Technologie', visit: 'Odwiedź projekt', close: 'Zamknij podgląd zdjęcia', previous: 'Poprzednie zdjęcie', next: 'Następne zdjęcie', photo: 'Zdjęcie' }
+    : { back: 'BACK TO SELECTED WORK', eyebrow: `PROJECT / ${project.number}`, overview: 'Overview', previews: 'Photo previews', technologies: 'Technologies', visit: 'Visit project', close: 'Close photo preview', previous: 'Previous photo', next: 'Next photo', photo: 'Photo' }
 
-  const selectedPreview = selectedPreviewIndex === null ? null : studioBodyArtPreviews[selectedPreviewIndex]
+  const selectedPreview = selectedPreviewIndex === null ? null : previews[selectedPreviewIndex]
 
   function openPreview(index: number) {
     setSelectedPreviewIndex(index)
@@ -62,7 +91,7 @@ export function StudioBodyArtPage() {
   function movePreview(direction: -1 | 1) {
     setSelectedPreviewIndex((current) => current === null
       ? current
-      : (current + direction + studioBodyArtPreviews.length) % studioBodyArtPreviews.length)
+      : (current + direction + previews.length) % previews.length)
   }
 
   return (
@@ -88,10 +117,10 @@ export function StudioBodyArtPage() {
         <h2 id="project-overview-title" className="eyebrow">{copy.overview}</h2>
         <p>{project.description}</p>
       </section>
-      <section className="project-detail__gallery" aria-labelledby="project-gallery-title">
+      {previews.length > 0 && <section className="project-detail__gallery" aria-labelledby="project-gallery-title">
         <h2 id="project-gallery-title" className="eyebrow">{copy.previews}</h2>
         <div className="project-detail__gallery-grid">
-          {studioBodyArtPreviews.map((preview, index) => (
+          {previews.map((preview, index) => (
             <button
               className="project-detail__preview"
               type="button"
@@ -99,11 +128,11 @@ export function StudioBodyArtPage() {
               onClick={() => openPreview(index)}
               aria-label={`${copy.previews} ${index + 1}`}
             >
-              <img className="nodrag" src={preview.src} alt={preview.alt[locale]} loading="lazy" decoding="async" draggable={false} />
+              <img className="nodrag" src={preview.src} alt={preview.alt} loading="lazy" decoding="async" draggable={false} />
             </button>
           ))}
         </div>
-      </section>
+      </section>}
       <section className="project-detail__bottom" aria-label={copy.technologies}>
         <div>
           <h2 className="eyebrow">{copy.technologies}</h2>
@@ -135,14 +164,14 @@ export function StudioBodyArtPage() {
       >
         <button className="project-detail__lightbox-close" type="button" onClick={() => dialogRef.current?.close()} aria-label={copy.close}>×</button>
         <div className="project-detail__lightbox-stage">
-          {selectedPreview && <img className="project-detail__lightbox-image" src={selectedPreview.src} alt={selectedPreview.alt[locale]} />}
+          {selectedPreview && <img className="project-detail__lightbox-image" src={selectedPreview.src} alt={selectedPreview.alt} />}
         </div>
         <div className="project-detail__lightbox-controls">
           <button className="project-detail__lightbox-arrow" type="button" onClick={() => movePreview(-1)} aria-label={copy.previous}>
             <svg aria-hidden="true" viewBox="0 0 24 24" fill="none"><path d="m15 18-6-6 6-6" /></svg>
           </button>
           <div className="project-detail__lightbox-dots" role="group" aria-label={copy.previews}>
-            {studioBodyArtPreviews.map((preview, index) => (
+            {previews.map((preview, index) => (
               <button
                 className={selectedPreviewIndex === index ? 'project-detail__lightbox-dot project-detail__lightbox-dot--active' : 'project-detail__lightbox-dot'}
                 key={preview.src}

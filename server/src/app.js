@@ -35,7 +35,7 @@ export async function createApp({ pool, config, dummyPasswordHash }) {
   })
   app.use('/api', requireSameOriginCsrf(config.frontendOrigin))
 
-  app.use('/api', createApiRouter({ authService, config }))
+  app.use('/api', createApiRouter({ authService, config, pool }))
   app.use('/api', notFound)
   app.use(errorHandler)
 

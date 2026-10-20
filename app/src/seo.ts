@@ -1,4 +1,5 @@
 import type { Locale } from './i18n/LocaleContext'
+import type { PublicProject } from './data/projectApi'
 
 const seo = {
   pl: {
@@ -11,21 +12,6 @@ const seo = {
     title: 'Cimach - Mateusz Cimachowski | Web Developer & Photography',
     description: 'Cimach is the portfolio of Mateusz Cimachowski, a web developer creating websites and web applications, with photography among his creative interests.',
     path: '/en/',
-    ogLocale: 'en_US',
-  },
-} as const
-
-const studioBodyArtSeo = {
-  pl: {
-    title: 'Studio BodyArt - projekt | CIMACH',
-    description: 'Strona usługowa Studio BodyArt, przygotowana z naciskiem na responsywność i widoczność w wyszukiwarkach.',
-    path: '/pl/projects/studio-bodyart/',
-    ogLocale: 'pl_PL',
-  },
-  en: {
-    title: 'Studio BodyArt - project | CIMACH',
-    description: 'A Studio BodyArt service website focused on responsive design and search visibility.',
-    path: '/en/projects/studio-bodyart/',
     ogLocale: 'en_US',
   },
 } as const
@@ -60,18 +46,42 @@ const adminSeo = {
   },
 } as const
 
-export type SeoPage = 'home' | 'studioBodyArt' | 'login' | 'admin'
+export type SeoPage = 'home' | 'project' | 'login' | 'admin'
 
-export function getSeo(locale: Locale, page: SeoPage = 'home') {
-  const pageSeo = page === 'studioBodyArt'
-    ? studioBodyArtSeo
-    : page === 'login' ? loginSeo : page === 'admin' ? adminSeo : seo
-  const entry = pageSeo[locale]
+export function getSeo(
+  locale: Locale,
+  page: SeoPage = 'home',
+  project?: PublicProject,
+  projectSlug?: string,
+  projectLocales?: Locale[],
+) {
+  if (page === 'project') {
+    const slug = projectSlug || ''
+    const path = `/${locale}/projects/${slug}/`
+    const fallback = seo[locale]
+    const availableLocales = projectLocales || [locale]
+    return {
+      title: project?.seoTitle || (project
+        ? `${project.name} - ${locale === 'pl' ? 'projekt' : 'project'} | CIMACH`
+        : fallback.title),
+      description: project?.seoDescription || project?.description || fallback.description,
+      path,
+      ogLocale: fallback.ogLocale,
+      canonical: `https://cimach.eu${path}`,
+      alternatePl: availableLocales.includes('pl') ? `https://cimach.eu/pl/projects/${slug}/` : null,
+      alternateEn: availableLocales.includes('en') ? `https://cimach.eu/en/projects/${slug}/` : null,
+      xDefault: availableLocales.includes('pl') ? `https://cimach.eu/pl/projects/${slug}/` : null,
+    }
+  }
+  const pageSeo = page === 'login' ? loginSeo : page === 'admin' ? adminSeo : seo
+  const fallback = pageSeo[locale]
   const translatedPage = pageSeo
+  const entry = fallback
   return {
     ...entry,
     canonical: `https://cimach.eu${entry.path}`,
     alternatePl: `https://cimach.eu${translatedPage.pl.path}`,
     alternateEn: `https://cimach.eu${translatedPage.en.path}`,
+    xDefault: `https://cimach.eu${translatedPage.pl.path}`,
   }
 }
