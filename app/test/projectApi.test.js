@@ -5,6 +5,7 @@ import { readFile } from 'node:fs/promises'
 import ts from 'typescript'
 
 let loadPublicProjectCatalog
+let loadAllPublicProjectCatalog
 let loadPublicProjectPage
 
 before(async () => {
@@ -13,7 +14,7 @@ before(async () => {
     compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 },
   })
   const moduleUrl = `data:text/javascript;base64,${Buffer.from(outputText).toString('base64')}`
-  ;({ loadPublicProjectCatalog, loadPublicProjectPage } = await import(moduleUrl))
+  ;({ loadPublicProjectCatalog, loadAllPublicProjectCatalog, loadPublicProjectPage } = await import(moduleUrl))
 })
 
 const project = {
@@ -35,6 +36,17 @@ test('loads the published project catalog by locale', async () => {
   assert.equal(catalog.projects[0].caseStudySlug, 'new-project-17')
 })
 
+test('loads all published projects separately from featured homepage catalog', async () => {
+  const requests = []
+  const fetcher = async (url) => {
+    requests.push(url)
+    return new Response(JSON.stringify({ projects: [project] }), { status: 200 })
+  }
+  const catalog = await loadAllPublicProjectCatalog('en', '/api', fetcher)
+  assert.deepEqual(requests, ['/api/projects?locale=en&scope=all'])
+  assert.equal(catalog.projects[0].caseStudySlug, 'new-project-17')
+})
+
 test('loads arbitrary slugs from the detail API and checks translated availability', async () => {
   const requests = []
   const fetcher = async (url) => {
@@ -45,7 +57,7 @@ test('loads arbitrary slugs from the detail API and checks translated availabili
     return new Response(JSON.stringify({ projects: [{ ...project, name: 'New project EN' }] }), { status: 200 })
   }
   const result = await loadPublicProjectPage('pl', 'new-project-17', '/api', fetcher)
-  assert.deepEqual(requests, ['/api/projects/new-project-17?locale=pl', '/api/projects?locale=en'])
+  assert.deepEqual(requests, ['/api/projects/new-project-17?locale=pl', '/api/projects?locale=en&scope=all'])
   assert.equal(result.project.name, 'New project')
   assert.deepEqual(result.availableLocales, ['pl', 'en'])
 })

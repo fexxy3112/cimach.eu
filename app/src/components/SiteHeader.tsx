@@ -1,7 +1,10 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { getPortfolio } from '../data/portfolio'
+import { hasAdminSession } from '../auth/adminSession'
 import { useLocale, type Locale } from '../i18n/LocaleContext'
 import type { SeoPage } from '../seo'
+
+const apiBase = import.meta.env.VITE_API_BASE_URL || '/api'
 
 export function SiteHeader({ activePage, projectSlug, projectLocales }: {
   activePage: SeoPage
@@ -9,6 +12,7 @@ export function SiteHeader({ activePage, projectSlug, projectLocales }: {
   projectLocales?: Locale[]
 }) {
   const [isMenuOpen, setIsMenuOpen] = useState(false)
+  const [isAdmin, setIsAdmin] = useState(false)
   const locale = useLocale()
   const portfolio = getPortfolio(locale)
   const homePath = `/${locale}/`
@@ -16,8 +20,36 @@ export function SiteHeader({ activePage, projectSlug, projectLocales }: {
     ? `/${nextLocale}/projects/${projectSlug}/`
     : `/${nextLocale}/`
   const copy = locale === 'pl'
-    ? { nav: ['Projekty', 'O mnie', 'Fotografia', 'Kontakt'], navLabel: 'Nawigacja główna', theme: 'Zmień motyw', close: 'Zamknij menu', open: 'Otwórz menu', switchLanguage: 'Zmień język' }
-    : { nav: ['Work', 'About', 'Photography', 'Contact'], navLabel: 'Main navigation', theme: 'Toggle theme', close: 'Close menu', open: 'Open menu', switchLanguage: 'Change language' }
+    ? { nav: ['Projekty', 'O mnie', 'Fotografia', 'Kontakt'], admin: 'Panel zarządzania', navLabel: 'Nawigacja główna', theme: 'Zmień motyw', close: 'Zamknij menu', open: 'Otwórz menu', switchLanguage: 'Zmień język' }
+    : { nav: ['Work', 'About', 'Photography', 'Contact'], admin: 'Admin panel', navLabel: 'Main navigation', theme: 'Toggle theme', close: 'Close menu', open: 'Open menu', switchLanguage: 'Change language' }
+
+  useEffect(() => {
+    let active = true
+    let currentRequest: AbortController | undefined
+    const refreshAdminSession = () => {
+      currentRequest?.abort()
+      const requestController = new AbortController()
+      currentRequest = requestController
+      fetch(`${apiBase}/auth/me`, { credentials: 'include', cache: 'no-store', signal: requestController.signal })
+        .then(async (response) => {
+          if (!response.ok) return null
+          return response.json() as Promise<unknown>
+        })
+        .then((result) => {
+          if (active && !requestController.signal.aborted) setIsAdmin(hasAdminSession(result))
+        })
+        .catch(() => {
+          if (active && !requestController.signal.aborted) setIsAdmin(false)
+        })
+    }
+    refreshAdminSession()
+    window.addEventListener('focus', refreshAdminSession)
+    return () => {
+      active = false
+      currentRequest?.abort()
+      window.removeEventListener('focus', refreshAdminSession)
+    }
+  }, [])
 
   function toggleTheme() {
     const nextTheme = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark'
@@ -42,6 +74,7 @@ export function SiteHeader({ activePage, projectSlug, projectLocales }: {
         <a href={activePage === 'home' ? '#about' : `${homePath}#about`} onClick={closeMenu}>{copy.nav[1]}</a>
         <a href={activePage === 'home' ? '#photo' : `${homePath}#photo`} onClick={closeMenu}>{copy.nav[2]}</a>
         <a href={activePage === 'home' ? '#contact' : `${homePath}#contact`} onClick={closeMenu}>{copy.nav[3]}</a>
+        {isAdmin && <a href={`/${locale}/admin/`} onClick={closeMenu}>{copy.admin}</a>}
       </nav>
       <div className="nav-right">
         <div className="language-switcher" aria-label={copy.switchLanguage}>

@@ -29,24 +29,28 @@ function prerenderPages() {
         const { default: App } = await server.ssrLoadModule('/src/app/App.tsx')
         const { getSeo } = await server.ssrLoadModule('/src/seo.ts')
         const { generateSitemap } = await server.ssrLoadModule('/src/sitemap.js')
-        const { loadPublicProjectCatalog, loadPublicProjectPage } = await server.ssrLoadModule('/src/data/projectApi.ts')
+        const { loadPublicProjectCatalog, loadAllPublicProjectCatalog, loadPublicProjectPage } = await server.ssrLoadModule('/src/data/projectApi.ts')
         const apiBase = process.env.CIMACH_API_BASE_URL || 'http://127.0.0.1:3001/api'
         const template = await readFile('dist/index.html', 'utf8')
         const catalogs = {
           pl: await loadPublicProjectCatalog('pl', apiBase),
           en: await loadPublicProjectCatalog('en', apiBase),
         }
+        const allCatalogs = {
+          pl: await loadAllPublicProjectCatalog('pl', apiBase),
+          en: await loadAllPublicProjectCatalog('en', apiBase),
+        }
 
         for (const locale of ['pl', 'en']) {
           const pages = [{ name: 'home' }]
-          for (const project of catalogs[locale].projects) {
+          for (const project of allCatalogs[locale].projects) {
             const slug = project.caseStudySlug
             if (!slug) continue
             if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug)) {
               throw new Error(`Invalid published project slug for prerendering: ${slug}`)
             }
             const availableLocales = ['pl', 'en'].filter((candidateLocale) =>
-              catalogs[candidateLocale].projects.some((candidate) => candidate.caseStudySlug === slug),
+              allCatalogs[candidateLocale].projects.some((candidate) => candidate.caseStudySlug === slug),
             )
             const projectPage = await loadPublicProjectPage(locale, slug, apiBase, fetch, undefined, availableLocales)
             if (!projectPage) throw new Error(`Published project detail is missing from the ${locale} API response for slug: ${slug}`)
@@ -118,7 +122,7 @@ function prerenderPages() {
           }
         }
 
-        await writeFile('dist/sitemap.xml', generateSitemap(catalogs, getSeo))
+        await writeFile('dist/sitemap.xml', generateSitemap(allCatalogs, getSeo))
       } finally {
         await server.close()
       }

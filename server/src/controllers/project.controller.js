@@ -1,8 +1,49 @@
 export function createProjectController(projectService) {
   return {
+    async adminList(_req, res, next) {
+      try {
+        return res.json(await projectService.listForAdmin())
+      } catch (error) {
+        return next(error)
+      }
+    },
+
+    async adminDetail(req, res, next) {
+      try {
+        const project = await projectService.findForAdmin(req.params.id)
+        if (!project) return res.status(404).json({ error: 'not_found' })
+        return res.json({ project })
+      } catch (error) {
+        return next(error)
+      }
+    },
+
+    async adminUpdate(req, res, next) {
+      try {
+        const project = await projectService.updateForAdmin(req.params.id, req.validatedProject)
+        if (!project) return res.status(404).json({ error: 'not_found' })
+        return res.json({ project })
+      } catch (error) {
+        if (error?.code === 'DUPLICATE_PROJECT_SLUG') return res.status(409).json({ error: 'slug_conflict' })
+        return next(error)
+      }
+    },
+
+    async adminUpdateFeatured(req, res, next) {
+      try {
+        const projects = await projectService.updateFeatured(req.validatedProjectIds)
+        return res.json({ projects })
+      } catch (error) {
+        if (error?.code === 'INVALID_FEATURED_PROJECTS') return res.status(409).json({ error: 'featured_projects_must_be_published' })
+        return next(error)
+      }
+    },
+
     async list(req, res, next) {
       try {
-        const projects = await projectService.listPublished(req.projectLocale)
+        const projects = req.projectScope === 'all'
+          ? await projectService.listAllPublished(req.projectLocale)
+          : await projectService.listPublished(req.projectLocale)
         return res.json({ projects })
       } catch (error) {
         return next(error)

@@ -6,9 +6,9 @@ import { SectionHeading } from '../../../components/SectionHeading'
 import { ArrowUpRight } from '../../../components/ArrowUpRight'
 import type { Locale } from '../../../i18n/LocaleContext'
 
-function ProjectRow({ project, locale }: { project: PublicProject; locale: Locale }) {
+function ProjectRow({ project, locale, position }: { project: PublicProject; locale: Locale; position: number }) {
   const content = <>
-      <span className="work-num">{project.number}</span>
+      <span className="work-num">{String(position).padStart(2, '0')}</span>
       <div className="work-name">
         <h3>{project.name}</h3>
         <span>{project.category}</span>
@@ -38,7 +38,7 @@ export function ProjectsSection({ projects, loading, error }: {
         <p>{intro.description}</p>
       </Reveal>
       <div className="work-list" aria-busy={loading}>
-        {projects.map((project) => <ProjectRow key={project.number} project={project} locale={locale} />)}
+        {projects.map((project, index) => <ProjectRow key={project.caseStudySlug || project.href} project={project} locale={locale} position={index + 1} />)}
         {loading && <p role="status">{locale === 'pl' ? 'Ładowanie projektów…' : 'Loading projects…'}</p>}
         {error && <p role="alert">{locale === 'pl' ? 'Nie udało się pobrać projektów.' : 'Projects could not be loaded.'}</p>}
       </div>

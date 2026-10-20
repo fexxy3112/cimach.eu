@@ -1,0 +1,164 @@
+.admin-project-editor {
+  margin-top: 48px;
+  padding-top: 28px;
+  border-top: 1px solid var(--line)
+}
+
+.admin-project-editor__heading,
+.admin-project-editor__actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px
+}
+
+.admin-project-editor__heading h2,
+.admin-project-editor__gallery h3 {
+  margin: 0;
+  color: var(--muted);
+  font: 10px var(--font-mono);
+  letter-spacing: .08em;
+  text-transform: uppercase
+}
+
+.admin-project-editor__grid,
+.admin-project-editor__translations {
+  display: grid;
+  gap: 18px
+}
+
+.admin-project-editor__grid--meta {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin-top: 26px
+}
+
+.admin-project-editor label {
+  display: grid;
+  min-width: 0;
+  gap: 8px;
+  color: var(--muted);
+  font: 9px var(--font-mono);
+  letter-spacing: .04em;
+  text-transform: uppercase
+}
+
+.admin-project-editor input,
+.admin-project-editor textarea,
+.admin-project-editor select {
+  width: 100%;
+  min-width: 0;
+  padding: 11px 12px;
+  border: 1px solid var(--line);
+  border-radius: 0;
+  background: var(--panel);
+  color: var(--ink);
+  font: 12px var(--font-sans);
+  letter-spacing: normal;
+  text-transform: none
+}
+
+.admin-project-editor textarea {
+  resize: vertical
+}
+
+.admin-project-editor input:focus,
+.admin-project-editor textarea:focus,
+.admin-project-editor select:focus {
+  outline: 1px solid var(--accent);
+  outline-offset: 1px
+}
+
+.admin-project-editor__hint,
+.admin-project-editor__error {
+  margin: 15px 0 0;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.6
+}
+
+.admin-project-editor__error {
+  color: var(--accent)
+}
+
+.admin-project-editor__translations {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin-top: 32px
+}
+
+.admin-project-editor fieldset {
+  display: grid;
+  min-width: 0;
+  gap: 15px;
+  margin: 0;
+  padding: 18px;
+  border: 1px solid var(--line)
+}
+
+.admin-project-editor legend {
+  padding: 0 8px;
+  color: var(--muted);
+  font: 10px var(--font-mono);
+  letter-spacing: .06em;
+  text-transform: uppercase
+}
+
+.admin-project-editor__gallery {
+  display: grid;
+  gap: 16px;
+  margin-top: 36px
+}
+
+.admin-project-editor__gallery h3 {
+  margin-bottom: 2px
+}
+
+.admin-project-editor__gallery fieldset {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: end
+}
+
+.admin-project-editor__button {
+  min-height: 38px;
+  padding: 0 12px;
+  border: 1px solid var(--line);
+  background: transparent;
+  color: var(--ink);
+  font: 9px var(--font-mono);
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  cursor: pointer
+}
+
+.admin-project-editor__button:hover {
+  border-color: var(--accent);
+  color: var(--accent)
+}
+
+.admin-project-editor__button--quiet {
+  justify-self: start
+}
+
+.admin-project-editor__actions {
+  justify-content: flex-start;
+  margin-top: 24px
+}
+
+.admin-project-editor__actions .admin-page__logout {
+  margin-top: 0
+}
+
+@media (max-width: 700px) {
+  .admin-project-editor__grid--meta,
+  .admin-project-editor__translations,
+  .admin-project-editor__gallery fieldset {
+    grid-template-columns: minmax(0, 1fr)
+  }
+
+  .admin-project-editor fieldset {
+    padding: 14px
+  }
+
+  .admin-project-editor__heading {
+    align-items: flex-start
+  }
+}

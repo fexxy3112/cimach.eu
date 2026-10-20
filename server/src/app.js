@@ -23,11 +23,11 @@ export async function createApp({ pool, config, dummyPasswordHash }) {
       return callback(null, origin === config.frontendOrigin)
     },
     credentials: true,
-    methods: ['GET', 'POST', 'OPTIONS'],
+    methods: ['GET', 'POST', 'PUT', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'X-CIMACH-CSRF'],
     maxAge: 600,
   }))
-  app.use(express.json({ limit: '16kb', strict: true }))
+  app.use(express.json({ limit: '256kb', strict: true }))
   app.use(cookieParser())
   app.use('/api', (_req, res, next) => {
     res.set('Cache-Control', 'no-store')

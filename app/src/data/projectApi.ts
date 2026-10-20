@@ -57,6 +57,18 @@ export async function loadPublicProjectCatalog(
   return { kind: 'catalog', locale, projects }
 }
 
+export async function loadAllPublicProjectCatalog(
+  locale: Locale,
+  apiBase: string,
+  fetcher: typeof fetch = fetch,
+  signal?: AbortSignal,
+): Promise<PublicProjectCatalogData> {
+  const url = apiUrl(apiBase, `/projects?locale=${locale}&scope=all`)
+  const response = await fetcher(url, { signal })
+  const { projects } = await readJson<ProjectListResponse>(response, url)
+  return { kind: 'catalog', locale, projects }
+}
+
 export async function loadPublicProjectPage(
   locale: Locale,
   slug: string,
@@ -77,7 +89,7 @@ export async function loadPublicProjectPage(
   if (!knownLocales) {
     const otherLocale: Locale = locale === 'pl' ? 'en' : 'pl'
     try {
-      const catalog = await loadPublicProjectCatalog(otherLocale, base, fetcher, signal)
+      const catalog = await loadAllPublicProjectCatalog(otherLocale, base, fetcher, signal)
       if (catalog.projects.some((candidate) => candidate.caseStudySlug === slug)) availableLocales.push(otherLocale)
     } catch {
       // A missing alternate translation must not hide an otherwise valid project page.
