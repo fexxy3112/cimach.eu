@@ -1,0 +1,13 @@
+# Environment files may contain database credentials or signing keys.
+**/.env
+**/.env.*
+
+# Repository-specific agent instructions may contain local guidance.
+**/AGENTS.md
+**/agents.md
+
+# Node and build artifacts.
+**/node_modules/
+**/dist/
+**/coverage/
+**/*.log

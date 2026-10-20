@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://cimach.eu/sitemap.xml

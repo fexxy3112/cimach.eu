@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"
+        xmlns:xhtml="http://www.w3.org/1999/xhtml">
+  <url>
+    <loc>https://cimach.eu/pl/</loc>
+    <xhtml:link rel="alternate" hreflang="pl" href="https://cimach.eu/pl/" />
+    <xhtml:link rel="alternate" hreflang="en" href="https://cimach.eu/en/" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://cimach.eu/pl/" />
+  </url>
+  <url>
+    <loc>https://cimach.eu/en/</loc>
+    <xhtml:link rel="alternate" hreflang="pl" href="https://cimach.eu/pl/" />
+    <xhtml:link rel="alternate" hreflang="en" href="https://cimach.eu/en/" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://cimach.eu/pl/" />
+  </url>
+  <url>
+    <loc>https://cimach.eu/pl/projects/studio-bodyart/</loc>
+    <xhtml:link rel="alternate" hreflang="pl" href="https://cimach.eu/pl/projects/studio-bodyart/" />
+    <xhtml:link rel="alternate" hreflang="en" href="https://cimach.eu/en/projects/studio-bodyart/" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://cimach.eu/pl/projects/studio-bodyart/" />
+  </url>
+  <url>
+    <loc>https://cimach.eu/en/projects/studio-bodyart/</loc>
+    <xhtml:link rel="alternate" hreflang="pl" href="https://cimach.eu/pl/projects/studio-bodyart/" />
+    <xhtml:link rel="alternate" hreflang="en" href="https://cimach.eu/en/projects/studio-bodyart/" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://cimach.eu/pl/projects/studio-bodyart/" />
+  </url>
+</urlset>

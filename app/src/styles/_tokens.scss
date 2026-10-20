@@ -1,0 +1,44 @@
+﻿$breakpoint-tablet: 850px;
+$breakpoint-mobile: 560px;
+
+:root {
+  color-scheme: dark;
+  --bg: #11120f;
+  --panel: #181a16;
+  --ink: #f0f0e9;
+  --muted: #92958a;
+  --line: #303229;
+  --accent: #d2f477;
+  --accent-ink: #1a2010;
+  --font-sans: Manrope, Arial, sans-serif;
+  --font-mono: 'DM Mono', monospace;
+  --content-max: 1440px;
+  --gutter: 6vw;
+  --section-space: 115px;
+  --header-height: 78px;
+  --radius-round: 50%;
+  --motion-fast: .2s;
+  --motion-interactive: .25s;
+  --motion-theme: .35s;
+  --motion-enter: .7s;
+}
+
+html[data-theme="light"] {
+  color-scheme: light;
+  --bg: #f4f4ef;
+  --panel: #e9eae2;
+  --ink: #171813;
+  --muted: #77796f;
+  --line: #d6d7ce;
+  --accent: #6f912d;
+  --accent-ink: #f7f8f1;
+}
+
+@media (max-width: $breakpoint-tablet) {
+  :root { --gutter: 5vw; --section-space: 85px; }
+}
+
+@media (max-width: $breakpoint-mobile) {
+  :root { --section-space: 70px; --header-height: 66px; }
+}
+
