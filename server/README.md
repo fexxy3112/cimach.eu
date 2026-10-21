@@ -37,7 +37,7 @@ The project does not currently use an ORM. The auth schema is small and already 
 
 2. From `server/`, install dependencies with `npm ci`.
 3. Run `npm run db:migrate` to apply pending versioned migrations.
-4. Run `npm run admin:create` in an interactive terminal. It asks for an email and hidden password, hashes it with bcrypt, and creates only the first administrator.
+4. Run `npm run admin:create` in an interactive terminal. It asks for an email and hidden password, hashes it with bcrypt, and creates an administrator. Run it again to add more administrators.
 5. Run `npm run dev` from `server/`; start the Vite frontend separately from `app/`.
 
 ## Database and migrations

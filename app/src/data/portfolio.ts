@@ -107,11 +107,11 @@ export const portfolio = {
     caption: 'Photography is paying attention.',
   },
   contact: {
-    note: 'Masz pomysł? Pogadajmy.',
-    titleFirstLine: 'Zróbmy coś',
-    titleAccent: 'dobrego.',
+    note: 'Zacznijmy od rozmowy.',
+    titleFirstLine: 'Masz pomysł?',
+    titleAccent: 'Zbudujmy go.',
     description:
-      'Szukasz kogoś do projektu, potrzebujesz strony albo chcesz po prostu wymienić się pomysłami?',
+      'Potrzebujesz strony internetowej, chcesz rozwinąć swój projekt albo masz pomysł, który warto zrealizować? Napisz - porozmawiajmy.',
     email: 'kontakt@cimach.eu',
   },
 } as const

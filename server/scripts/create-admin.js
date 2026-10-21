@@ -60,14 +60,10 @@ try {
 
   const connection = await pool.getConnection()
   try {
-    const [lockRows] = await connection.execute('SELECT GET_LOCK(?, 10) AS acquired', ['cimach-first-admin'])
+    const [lockRows] = await connection.execute('SELECT GET_LOCK(?, 10) AS acquired', ['cimach-admin-create'])
     if (Number(lockRows[0].acquired) !== 1) throw new Error('Could not acquire administrator setup lock.')
 
     const users = createUserModel(pool)
-    if (await users.countAdmins(connection) > 0) {
-      throw new Error('An administrator already exists. This command only creates the first administrator.')
-    }
-
     const password = await promptHidden('Administrator password (minimum 8 characters): ')
     const confirmation = await promptHidden('Repeat password: ')
     if (password !== confirmation) throw new Error('Passwords do not match.')
@@ -78,7 +74,7 @@ try {
     const passwordHash = await bcrypt.hash(password, 12)
     await users.createAdmin({ email, passwordHash }, connection)
   } finally {
-    try { await connection.execute('SELECT RELEASE_LOCK(?)', ['cimach-first-admin']) } catch { /* connection cleanup below */ }
+    try { await connection.execute('SELECT RELEASE_LOCK(?)', ['cimach-admin-create']) } catch { /* connection cleanup below */ }
     connection.release()
   }
   stdout.write('Administrator created. Only the password hash was stored.\n')

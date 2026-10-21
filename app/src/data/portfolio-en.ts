@@ -82,11 +82,11 @@ export const portfolioEn = {
     caption: 'Photography is paying attention.',
   },
   contact: {
-    note: 'Have an idea? Let’s talk.',
-    titleFirstLine: "Let's make something",
-    titleAccent: 'good.',
+    note: "Let's start with a conversation.",
+    titleFirstLine: 'Have an idea?',
+    titleAccent: "Let's build it.",
     description:
-      'Looking for someone for a project, need a website or simply want to exchange ideas?',
+      "Need a website, want to grow your project, or have an idea worth bringing to life? Write to me - let's talk.",
     email: 'kontakt@cimach.eu',
   },
 } as const
