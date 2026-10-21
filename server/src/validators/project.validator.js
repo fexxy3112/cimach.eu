@@ -25,6 +25,10 @@ function isHttpUrl(value) {
   }
 }
 
+function isImageUrl(value) {
+  return isHttpUrl(value) || (typeof value === 'string' && /^\/api\/uploads\/[a-f0-9]{40}\.webp$/.test(value))
+}
+
 function optionalText(value, maxLength) {
   return value === null || value === undefined || value === '' || (typeof value === 'string' && value.length <= maxLength)
 }
@@ -34,7 +38,7 @@ export function validateProjectId(req, res, next) {
   return next()
 }
 
-export function validateProjectUpdate(req, res, next) {
+function validateProjectPayload(req, res, next, { requireSortOrder = true } = {}) {
   const body = req.body
   const fields = {}
   const add = (field, message) => { fields[field] = message }
@@ -44,9 +48,12 @@ export function validateProjectUpdate(req, res, next) {
   }
   if (typeof body.slug !== 'string' || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(body.slug) || body.slug.length > 160) add('slug', 'invalid')
   if (!isHttpUrl(body.projectUrl)) add('projectUrl', 'invalid')
-  if (body.mainImageUrl !== null && body.mainImageUrl !== '' && !isHttpUrl(body.mainImageUrl)) add('mainImageUrl', 'invalid')
+  if (body.mainImageUrl !== null && body.mainImageUrl !== '' && !isImageUrl(body.mainImageUrl)) add('mainImageUrl', 'invalid')
+  if (!optionalText(body.mainImageAltPl, 512)) add('mainImageAltPl', 'invalid')
+  if (!optionalText(body.mainImageAltEn, 512)) add('mainImageAltEn', 'invalid')
   if (!isProjectStatus(body.status)) add('status', 'invalid')
-  if (!Number.isSafeInteger(body.sortOrder) || body.sortOrder < 0 || body.sortOrder > 1000000) add('sortOrder', 'invalid')
+  if ((requireSortOrder || body.sortOrder !== undefined) &&
+      (!Number.isSafeInteger(body.sortOrder) || body.sortOrder < 0 || body.sortOrder > 1000000)) add('sortOrder', 'invalid')
 
   if (!body.translations || typeof body.translations !== 'object' || Array.isArray(body.translations)) {
     add('translations', 'required')
@@ -76,7 +83,7 @@ export function validateProjectUpdate(req, res, next) {
     add('gallery', 'invalid')
   } else {
     body.gallery.forEach((image, index) => {
-      if (!image || typeof image !== 'object' || !isHttpUrl(image.src)) add(`gallery.${index}.src`, 'invalid')
+      if (!image || typeof image !== 'object' || !isImageUrl(image.src)) add(`gallery.${index}.src`, 'invalid')
       if (typeof image?.altPl !== 'string' || image.altPl.length > 512) add(`gallery.${index}.altPl`, 'invalid')
       if (typeof image?.altEn !== 'string' || image.altEn.length > 512) add(`gallery.${index}.altEn`, 'invalid')
     })
@@ -85,6 +92,14 @@ export function validateProjectUpdate(req, res, next) {
   if (Object.keys(fields).length) return res.status(422).json({ error: 'validation_failed', fields })
   req.validatedProject = body
   return next()
+}
+
+export function validateProjectUpdate(req, res, next) {
+  return validateProjectPayload(req, res, next)
+}
+
+export function validateProjectCreate(req, res, next) {
+  return validateProjectPayload(req, res, next, { requireSortOrder: false })
 }
 
 export function validateFeaturedSelection(req, res, next) {

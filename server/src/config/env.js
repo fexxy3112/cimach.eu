@@ -1,4 +1,6 @@
 import 'dotenv/config'
+import { dirname, resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
 
 function required(name) {
   const value = process.env[name]?.trim()
@@ -20,6 +22,7 @@ function parseOrigin(value, name) {
 }
 
 const nodeEnv = required('NODE_ENV')
+const serverDirectory = resolve(dirname(fileURLToPath(import.meta.url)), '../..')
 if (!['development', 'test', 'production'].includes(nodeEnv)) {
   throw new Error('NODE_ENV must be development, test, or production')
 }
@@ -63,6 +66,7 @@ export const config = Object.freeze({
   nodeEnv,
   isProduction: nodeEnv === 'production',
   port,
+  uploadDir: resolve(serverDirectory, process.env.UPLOAD_DIR || 'uploads'),
   frontendOrigin,
   jwtSecret,
   jwtIssuer: process.env.JWT_ISSUER || 'https://cimach.eu',

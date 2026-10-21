@@ -34,11 +34,21 @@
 }
 
 .admin-page__identity {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px 20px;
   margin: 24px 0 0;
   padding: 16px 0;
   border-top: 1px solid var(--line);
   border-bottom: 1px solid var(--line);
   font: 12px var(--font-mono)
+}
+
+.admin-page__identity > span {
+  min-width: 0;
+  overflow-wrap: anywhere
 }
 
 .admin-page__logout {
@@ -55,6 +65,10 @@
   cursor: pointer
 }
 
+.admin-page__logout--identity {
+  margin-top: 0
+}
+
 .admin-page__logout:hover {
   border-color: var(--accent);
   color: var(--accent)
@@ -67,6 +81,16 @@
 
 .admin-projects {
   margin-top: 54px
+}
+
+.admin-projects__topbar {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 36px
+}
+
+.admin-projects__topbar .admin-page__logout {
+  margin-top: 0
 }
 
 .admin-projects h2 {
@@ -325,10 +349,14 @@
     padding: 12px 8px
   }
 
-  .admin-projects__featured-card code,
-  .admin-projects__featured-card > .admin-projects__text-action {
+  .admin-projects__featured-card code {
     grid-column: 3;
     grid-row: 2
+  }
+
+  .admin-projects__featured-card > .admin-projects__text-action {
+    grid-column: 3;
+    grid-row: 3
   }
 
   .admin-projects__row-actions {

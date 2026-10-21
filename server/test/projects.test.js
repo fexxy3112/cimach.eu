@@ -80,6 +80,17 @@ function fakePool(role = 'admin') {
         release() { this.statements.push('RELEASE') },
         async execute(sql, values = []) {
           this.statements.push(sql)
+          if (sql.includes('MAX(CAST(display_number AS UNSIGNED))')) return [[{ nextNumber: 5 }], []]
+          if (sql.includes('MAX(sort_order)')) return [[{ nextOrder: 3 }], []]
+          if (sql.includes('INSERT INTO projects')) {
+            this.createdProjectValues = values
+            if (values[1] === 'duplicate-slug') {
+              const error = new Error('duplicate key')
+              error.code = 'ER_DUP_ENTRY'
+              throw error
+            }
+            return [{ insertId: 10 }, []]
+          }
           if (sql.includes('SELECT id FROM projects WHERE id = ? FOR UPDATE')) {
             return values[0] === '7' || values[0] === 7 ? [[{ id: 7 }], []] : [[], []]
           }
@@ -235,6 +246,53 @@ async function putJson(base, path, body, cookie) {
     body: JSON.stringify(body),
   })
 }
+
+async function postJson(base, path, body, cookie) {
+  return fetch(`${base}${path}`, {
+    method: 'POST',
+    headers: { Origin: origin, 'X-CIMACH-CSRF': '1', 'Content-Type': 'application/json', ...(cookie ? { Cookie: cookie } : {}) },
+    body: JSON.stringify(body),
+  })
+}
+
+function createPayload(overrides = {}) {
+  return {
+    slug: 'new-project',
+    projectUrl: 'https://example.com/project',
+    mainImageUrl: null,
+    status: 'draft',
+    sortOrder: 4,
+    translations: {
+      pl: { title: 'Nowy projekt', category: 'Strona internetowa', description: 'Opis projektu.', seoTitle: null, seoDescription: null, technologies: ['React'] },
+      en: { title: 'New project', category: 'Website', description: 'Project description.', seoTitle: null, seoDescription: null, technologies: ['React'] },
+    },
+    gallery: [{ src: 'https://images.example/new.jpg', altPl: 'Zdjęcie projektu', altEn: 'Project image' }],
+    ...overrides,
+  }
+}
+
+test('creating a project requires an admin and saves its translations, technologies and gallery transactionally', async (t) => {
+  const admin = await startApi(t)
+  const path = '/api/admin/projects'
+  assert.equal((await postJson(admin.base, path, createPayload())).status, 401)
+
+  const response = await postJson(admin.base, path, createPayload(), admin.cookie)
+  assert.equal(response.status, 201)
+  assert.deepEqual(await response.json(), { project: { id: '10' } })
+  assert.deepEqual(admin.pool.lastConnection.createdProjectValues, [
+    '05', 'new-project', 'https://example.com/project', null, 'draft', 4, 'draft',
+  ])
+  assert.equal(admin.pool.lastConnection.statements.filter((sql) => sql.includes('INSERT INTO project_translations')).length, 2)
+  assert.equal(admin.pool.lastConnection.statements.filter((sql) => sql.includes('INSERT INTO project_technologies')).length, 2)
+  assert.equal(admin.pool.lastConnection.statements.filter((sql) => sql.includes('INSERT INTO project_images')).length, 1)
+  assert.equal(admin.pool.lastConnection.statements.at(-2), 'COMMIT')
+
+  assert.equal((await postJson(admin.base, path, createPayload({ slug: 'INVALID slug' }), admin.cookie)).status, 422)
+  assert.equal((await postJson(admin.base, path, createPayload({ slug: 'duplicate-slug' }), admin.cookie)).status, 409)
+  assert.equal((await postJson(admin.base, path, createPayload({ translations: { pl: createPayload().translations.pl } }), admin.cookie)).status, 422)
+  const editor = await startApi(t, 'editor')
+  assert.equal((await postJson(editor.base, path, createPayload(), editor.cookie)).status, 403)
+})
 
 test('project editing is admin-only, validates bilingual data and keeps unchanged gallery rows', async (t) => {
   const admin = await startApi(t)

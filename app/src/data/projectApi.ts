@@ -9,6 +9,7 @@ export type PublicProject = {
   href: string
   caseStudySlug?: string
   mainImage: string | null
+  mainImageAlt?: string | null
   seoTitle: string | null
   seoDescription: string | null
 }

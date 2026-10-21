@@ -65,6 +65,14 @@ cd server && npm ci && npm run db:migrate
 
 Required variables are `NODE_ENV`, `PORT`, `FRONTEND_ORIGIN`, `JWT_SECRET_BASE64`, `JWT_ISSUER`, `JWT_AUDIENCE`, `JWT_ACCESS_TTL_SECONDS`, `DB_HOST`, `DB_PORT`, `DB_DATABASE`, `DB_USERNAME`, `DB_PASSWORD`, `DB_CONNECTION_LIMIT`, `TRUST_PROXY_CIDRS`, `AUTH_COOKIE_NAME`, `AUTH_COOKIE_SAME_SITE`, and `AUTH_COOKIE_DOMAIN`. For local Vite, use `NODE_ENV=development`, `FRONTEND_ORIGIN=http://localhost:5173`, `PORT=3001`, and a local MySQL connection. Generate at least 32 random bytes for `JWT_SECRET_BASE64`. Production additionally requires HTTPS for `FRONTEND_ORIGIN` and explicit `TRUST_PROXY_CIDRS`. `.env` and `.env.example` are ignored by Git in this repository because a filled example file previously exposed credentials; do not force-add them.
 
+## Image uploads
+
+Administrators upload JPEG, PNG, or WebP images through `POST /api/admin/uploads` using the existing authenticated session and CSRF header. The API validates the actual image content, limits source files to 10 MB and 40 megapixels, applies EXIF orientation, scales images down to at most 2400 × 2400 pixels, and stores optimized WebP files at quality 82. It returns a same-origin `/api/uploads/<random-name>.webp` URL. The browser sends only that URL and localized alt text to the existing project create/update endpoints; image bytes are not stored in MySQL.
+
+Set optional `UPLOAD_DIR` to an absolute, writable, persistent directory outside the application release directory in production. If unset, files go to `server/uploads/`. Back up this directory together with the database. Do not point it at an ephemeral deployment directory. Uploaded files are immutable and served with a one-year cache header. Files are not automatically deleted when an image URL is removed from a project, so abandoned uploads may require a later cleanup policy.
+
+Migration `004-main-image-alt` adds nullable PL/EN alt text fields for the main image; existing rows are preserved and retain `NULL` alt text until edited. It is required before deploying this version of the editor/API. Review and apply it through the existing controlled migration procedure; it has not been run as part of this change.
+
 ## Projects data migration
 
 The current public data contains three active project entries in the same order in `app/src/data/portfolio.ts` and `portfolio-en.ts`: CIMACH, Studio BodyArt, and Experiments. The visible `03` block is commented out and is not imported. Studio BodyArt has the only current case-study slug (`studio-bodyart`) and three remote gallery images in `app/src/data/project-previews.ts`. No project has a main-image reference. Project-specific SEO exists only for Studio BodyArt in `app/src/seo.ts` and is included in the import snapshot.

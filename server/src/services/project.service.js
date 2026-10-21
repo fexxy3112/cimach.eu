@@ -10,6 +10,9 @@ export function createProjectService(pool) {
     async findForAdmin(id) {
       return projects.findAdminById(id)
     },
+    async createForAdmin(project) {
+      return projects.createAdmin(project)
+    },
     async updateForAdmin(id, project) {
       const updated = await projects.updateAdminById(id, project)
       if (!updated) return null

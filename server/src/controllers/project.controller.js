@@ -18,6 +18,16 @@ export function createProjectController(projectService) {
       }
     },
 
+    async adminCreate(req, res, next) {
+      try {
+        const id = await projectService.createForAdmin(req.validatedProject)
+        return res.status(201).json({ project: { id } })
+      } catch (error) {
+        if (error?.code === 'DUPLICATE_PROJECT_SLUG') return res.status(409).json({ error: 'slug_conflict' })
+        return next(error)
+      }
+    },
+
     async adminUpdate(req, res, next) {
       try {
         const project = await projectService.updateForAdmin(req.params.id, req.validatedProject)

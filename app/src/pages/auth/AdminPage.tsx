@@ -31,6 +31,7 @@ export function AdminPage() {
   const [featuredLimit, setFeaturedLimit] = useState(3)
   const [isSavingFeatured, setIsSavingFeatured] = useState(false)
   const [editingProjectId, setEditingProjectId] = useState<string | null>(null)
+  const [isCreatingProject, setIsCreatingProject] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
   const [isLoggingOut, setIsLoggingOut] = useState(false)
   const copy = locale === 'pl'
@@ -44,7 +45,7 @@ export function AdminPage() {
         featuredHelp: 'Możesz oznaczyć maksymalnie {limit} opublikowanych projektów. Przeciągnij zaznaczone projekty, aby ustawić ich kolejność.',
         saveFeatured: 'Zapisz wyróżnione projekty', featuredSaved: 'Zapisano kolejność projektów na stronie głównej.',
         featuredError: 'Nie udało się zapisać wyróżnionych projektów.', unsaved: 'Masz niezapisane zmiany w wyróżnionych projektach.', discardUnsaved: 'Odrzucić niezapisane zmiany wyróżnionych projektów i przejść do edycji?', emptyFeatured: 'Nie wybrano jeszcze wyróżnionych projektów.', addFeatured: 'Dodaj do wyróżnionych', removeFeatured: 'Usuń z wyróżnionych', edit: 'Edytuj', drag: 'Przeciągnij, aby zmienić kolejność',
-        actions: 'Akcje',
+        actions: 'Akcje', newProject: 'Dodaj projekt',
       }
     : {
         eyebrow: 'ADMIN AREA', title: 'Dashboard', intro: 'Administrator session is active.',
@@ -56,7 +57,7 @@ export function AdminPage() {
         featuredHelp: 'Choose up to {limit} published projects. Drag selected projects to change their order.',
         saveFeatured: 'Save featured projects', featuredSaved: 'Homepage project order saved.',
         featuredError: 'Could not save featured projects.', unsaved: 'You have unsaved changes to featured projects.', discardUnsaved: 'Discard unsaved featured project changes and continue to editing?', emptyFeatured: 'No featured projects selected yet.', addFeatured: 'Add to featured', removeFeatured: 'Remove from featured', edit: 'Edit', drag: 'Drag to change order',
-        actions: 'Actions',
+        actions: 'Actions', newProject: 'Add project',
       }
 
   useEffect(() => {
@@ -214,7 +215,21 @@ export function AdminPage() {
       }))
       setFeaturedError('')
     }
+    setIsCreatingProject(false)
     setEditingProjectId(projectId)
+  }
+
+  function openProjectCreator() {
+    if (hasFeaturedChanges && !window.confirm(copy.discardUnsaved)) return
+    if (hasFeaturedChanges && projects) {
+      setProjects(projects.map((project) => {
+        const order = savedFeaturedIds.indexOf(project.id)
+        return { ...project, isFeatured: order >= 0, featuredOrder: order >= 0 ? order + 1 : null }
+      }))
+      setFeaturedError('')
+    }
+    setEditingProjectId(null)
+    setIsCreatingProject(true)
   }
 
   async function saveFeatured() {
@@ -252,6 +267,7 @@ export function AdminPage() {
 
   async function refreshProjects() {
     setEditingProjectId(null)
+    setIsCreatingProject(false)
     setProjectsError('')
     try {
       const response = await fetch(`${apiBase}/admin/projects`, { credentials: 'include', cache: 'no-store' })
@@ -279,11 +295,24 @@ export function AdminPage() {
           : user
             ? <>
                 <p className="admin-page__intro">{copy.intro}</p>
-                <p className="admin-page__identity">{user.email}</p>
-                {editingProjectId
-                  ? <AdminProjectEditor projectId={editingProjectId} onCancel={() => setEditingProjectId(null)} onSaved={refreshProjects} />
+                <div className="admin-page__identity">
+                  <span>{user.email}</span>
+                  <button className="admin-page__logout admin-page__logout--identity" type="button" onClick={logout} disabled={isLoggingOut}>
+                    {isLoggingOut ? copy.loading : copy.logout}
+                  </button>
+                </div>
+                {isCreatingProject || editingProjectId
+                  ? <AdminProjectEditor
+                      projectId={isCreatingProject ? null : editingProjectId}
+                      initialSortOrder={projects ? Math.max(-1, ...projects.map((project) => project.sortOrder)) + 1 : 0}
+                      onCancel={() => { setIsCreatingProject(false); setEditingProjectId(null) }}
+                      onSaved={refreshProjects}
+                    />
                   : <section className="admin-projects" aria-label={copy.projects}>
                   {projectsError && <p className="admin-page__message" role="alert">{projectsError}</p>}
+                  <div className="admin-projects__topbar">
+                    <button className="admin-page__logout" type="button" onClick={openProjectCreator}>{copy.newProject}</button>
+                  </div>
                   <section className="admin-projects__group" aria-labelledby="admin-featured-title">
                     <h2 id="admin-featured-title" className="eyebrow">{copy.featuredProjects}</h2>
                     <p className="admin-projects__help">{copy.featuredHelp.replace('{limit}', String(featuredLimit))}</p>
@@ -362,9 +391,6 @@ export function AdminPage() {
                       : <p className="admin-page__message">{copy.noProjects}</p>}
                   </section>
                 </section>}
-                <button className="admin-page__logout" type="button" onClick={logout} disabled={isLoggingOut}>
-                  {isLoggingOut ? copy.loading : copy.logout}
-                </button>
               </>
             : <p className="admin-page__message" role="alert">{message || copy.unavailable}</p>}
       </section>

@@ -17,7 +17,7 @@ export function ProjectPage({ project, loading, error, notFound }: {
   const [selectedPreviewIndex, setSelectedPreviewIndex] = useState<number | null>(null)
   const [isBackCompact, setIsBackCompact] = useState(false)
   const previews = project
-    ? project.gallery.length ? project.gallery : project.mainImage ? [{ src: project.mainImage, alt: project.name }] : []
+    ? project.gallery.length ? project.gallery : project.mainImage ? [{ src: project.mainImage, alt: project.mainImageAlt || project.name }] : []
     : []
 
   useEffect(() => {
