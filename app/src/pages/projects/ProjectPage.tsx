@@ -2,15 +2,30 @@ import { useEffect, useRef, useState } from 'react'
 import type { PublicProjectDetail } from '../../data/projectApi'
 import { useLocale } from '../../i18n/LocaleContext'
 import { ArrowUpRight } from '../../components/ArrowUpRight'
+import { LoadingSpinner } from '../../components/LoadingSpinner'
+import { ErrorToast } from '../../components/ErrorToast'
+import { AdminProjectEditor } from '../auth/AdminProjectEditor'
+import { EditableText } from './EditableText'
+import { useProjectEditing } from './useProjectEditing'
 import './ProjectPage.scss'
+import './ProjectEditing.scss'
 
-export function ProjectPage({ project, loading, error, notFound }: {
+export function ProjectPage({ project, loading, error, notFound, onProjectUpdated, preview = false }: {
   project: PublicProjectDetail | null
   loading: boolean
   error: boolean
   notFound: boolean
+  onProjectUpdated: (project: PublicProjectDetail) => void
+  preview?: boolean
 }) {
   const locale = useLocale()
+  const editing = useProjectEditing(project, locale, onProjectUpdated, preview)
+  const settingsDialog = useRef<HTMLDialogElement>(null)
+  const inline = editing.mode === 'inline' && editing.draft !== null
+  useEffect(() => {
+    if (editing.mode === 'settings') settingsDialog.current?.showModal()
+    else settingsDialog.current?.close()
+  }, [editing.mode])
   const dialogRef = useRef<HTMLDialogElement>(null)
   const backRef = useRef<HTMLAnchorElement>(null)
   const titleSectionRef = useRef<HTMLElement>(null)
@@ -55,6 +70,7 @@ export function ProjectPage({ project, loading, error, notFound }: {
     }
   }, [project])
 
+  if (preview && editing.accessDenied) return <main className="site-main project-detail"><p role="status">{locale === 'pl' ? 'Wymagane logowanie administratora.' : 'Administrator login required.'}</p></main>
   if (!project) {
     if (notFound) {
       const copy = locale === 'pl'
@@ -99,6 +115,28 @@ export function ProjectPage({ project, loading, error, notFound }: {
 
   return (
     <main className="site-main project-detail">
+      {(editing.isAdmin || editing.mode !== null) && <div className="project-edit__toolbar" aria-label={locale === 'pl' ? 'Edycja projektu' : 'Project editor'} aria-busy={editing.busy}>
+        {preview && <span>{locale === 'pl' ? 'Podgląd administracyjny' : 'Admin preview'}</span>}
+        <label className="project-edit__status">
+          {locale === 'pl' ? 'Widoczność' : 'Visibility'}
+          <select aria-label={locale === 'pl' ? 'Status projektu' : 'Project status'} value={editing.status ?? ''} disabled={editing.busy || editing.settingsBusy || editing.mode !== null || !editing.status} onChange={(event) => void editing.changeStatus(event.target.value as 'draft' | 'published')}>
+            {!editing.status && <option value="">…</option>}
+            <option value="draft">{locale === 'pl' ? 'Szkic' : 'Draft'}</option>
+            <option value="published">{locale === 'pl' ? 'Opublikowany' : 'Published'}</option>
+          </select>
+          {editing.busy && <LoadingSpinner />}
+        </label>
+        {inline ? <>
+          <span>{locale === 'pl' ? 'Edytujesz treść PL · * pole wymagane' : 'Editing EN content · * required field'}</span>
+          <button type="button" disabled={editing.busy} onClick={() => void editing.save()}>{editing.busy && <LoadingSpinner />} {locale === 'pl' ? 'Zapisz' : 'Save'}</button>
+          <button type="button" disabled={editing.busy} onClick={editing.cancel}>{locale === 'pl' ? 'Anuluj' : 'Cancel'}</button>
+        </> : <>
+          <button type="button" disabled={editing.busy || editing.settingsBusy} onClick={() => void editing.begin('inline')}>{editing.busy && <LoadingSpinner />} {locale === 'pl' ? 'Edytuj na stronie' : 'Edit on page'}</button>
+          <button type="button" disabled={editing.busy || editing.settingsBusy} onClick={() => void editing.begin('settings')}>{locale === 'pl' ? 'Zdjęcia i ustawienia' : 'Images and settings'}</button>
+        </>}
+        {editing.saved && !inline && <span role="status">{locale === 'pl' ? 'Zapisano zmiany.' : 'Changes saved.'}</span>}
+      </div>}
+      <ErrorToast message={editing.error} onDismiss={editing.clearError} action={editing.sessionExpired ? { href: `/${locale}/login/`, label: locale === 'pl' ? 'Zaloguj się w nowej karcie' : 'Sign in in a new tab' } : undefined} />
       <a
         ref={backRef}
         className={`project-detail__back${isBackCompact ? ' project-detail__back--compact' : ''}`}
@@ -113,12 +151,12 @@ export function ProjectPage({ project, loading, error, notFound }: {
       </a>
       <section className="project-detail__hero" aria-labelledby="project-title" ref={titleSectionRef}>
         <p className="eyebrow">{copy.eyebrow}</p>
-        <h1 id="project-title">{project.name}<em>.</em></h1>
-        <p className="project-detail__category">{project.category}</p>
+        <h1 id="project-title">{inline && editing.draft ? <EditableText required value={editing.draft.title} label={locale === 'pl' ? 'Tytuł projektu' : 'Project title'} disabled={editing.busy} onChange={(title) => editing.setDraft((draft) => draft && { ...draft, title })} /> : project.name}<em>.</em></h1>
+        <p className="project-detail__category">{inline && editing.draft ? <EditableText required value={editing.draft.category} label={locale === 'pl' ? 'Kategoria' : 'Category'} disabled={editing.busy} onChange={(category) => editing.setDraft((draft) => draft && { ...draft, category })} /> : project.category}</p>
       </section>
       <section className="project-detail__overview" aria-labelledby="project-overview-title">
         <h2 id="project-overview-title" className="eyebrow">{copy.overview}</h2>
-        <p>{project.description}</p>
+        <p>{inline && editing.draft ? <EditableText required value={editing.draft.description} label={copy.overview} multiline disabled={editing.busy} onChange={(description) => editing.setDraft((draft) => draft && { ...draft, description })} /> : project.description}</p>
       </section>
       {previews.length > 0 && <section className="project-detail__gallery" aria-labelledby="project-gallery-title">
         <h2 id="project-gallery-title" className="eyebrow">{copy.previews}</h2>
@@ -140,13 +178,27 @@ export function ProjectPage({ project, loading, error, notFound }: {
         <div>
           <h2 className="eyebrow">{copy.technologies}</h2>
           <div className="tags">
-            {project.technologies.map((technology) => <span key={technology}>{technology}</span>)}
+            {inline && editing.draft ? <>
+              {editing.draft.technologies.map((technology, index) => <span key={index}>
+                <EditableText value={technology} label={`${copy.technologies} ${index + 1}`} disabled={editing.busy} onChange={(value) => editing.setDraft((draft) => draft && { ...draft, technologies: draft.technologies.map((item, position) => position === index ? value : item) })} />
+                <button className="project-edit__remove" type="button" disabled={editing.busy} aria-label={`${locale === 'pl' ? 'Usuń' : 'Remove'} ${technology}`} onClick={() => editing.setDraft((draft) => draft && { ...draft, technologies: draft.technologies.filter((_, position) => position !== index) })}>×</button>
+              </span>)}
+              <button type="button" className="project-edit__add" disabled={editing.busy || editing.draft.technologies.length >= 30} onClick={() => editing.setDraft((draft) => draft && { ...draft, technologies: [...draft.technologies, ''] })}>{locale === 'pl' ? '+ Technologia' : '+ Technology'}</button>
+            </> : project.technologies.map((technology) => <span key={technology}>{technology}</span>)}
           </div>
         </div>
         <a className="project-detail__visit" href={project.href} target="_blank" rel="noreferrer">
           {copy.visit}<ArrowUpRight />
         </a>
       </section>
+      <dialog ref={settingsDialog} className="project-edit__settings" aria-label={locale === 'pl' ? 'Zdjęcia i ustawienia projektu' : 'Project images and settings'} onCancel={(event) => event.preventDefault()}>
+        {editing.mode === 'settings' && editing.projectId && <AdminProjectEditor
+          projectId={editing.projectId}
+          onCancel={editing.closeSettings}
+          onSaved={() => void editing.settingsSaved()}
+          onBusyChange={editing.setSettingsBusy}
+        />}
+      </dialog>
       <dialog
         className="project-detail__lightbox"
         ref={dialogRef}

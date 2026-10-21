@@ -36,13 +36,34 @@ function fakePool(role = 'admin') {
       if (sql.includes('FROM projects p') && sql.includes('LEFT JOIN project_translations')) {
         return [adminProjects, []]
       }
+      if (sql.includes("p.status IN ('published', 'draft')")) {
+        const locale = values[0]
+        const rows = adminProjects
+          .filter((project) => project.status === 'published' || project.id === '8')
+          .filter((project) => project.id !== '8' || locale === 'pl')
+          .map((project) => ({
+            id: Number(project.id), number: project.id === '9' ? '01' : project.id === '7' ? '02' : '03',
+            caseStudySlug: project.slug, href: 'https://example.com', mainImage: null,
+            mainImageAlt: null, status: project.status,
+            name: locale === 'en' ? project.titleEn : project.titlePl,
+            category: project.id === '8' ? 'Strona' : 'Business website',
+            description: project.id === '8' ? 'Treść szkicu.' : 'Project description.',
+            seoTitle: null, seoDescription: null,
+          }))
+        return [rows, []]
+      }
+      if (sql.includes('FROM projects WHERE slug = ? LIMIT 1')) {
+        const project = adminProjects.find((candidate) => candidate.slug === values[0])
+        return [project ? [{ id: Number(project.id) }] : [], []]
+      }
       if (sql.includes('FROM projects WHERE id = ? LIMIT 1')) {
-        return values[0] === '7' || values[0] === 7 ? [[{
-          id: 7, slug: 'studio-bodyart', projectUrl: 'https://michalowice.studio-bodyart.pl',
-          mainImageUrl: null, status: 'published', sortOrder: 2,
-        }], []] : [[], []]
+        const project = adminProjects.find((candidate) => candidate.id === String(values[0]))
+        return [project ? [{
+          ...project, number: '02', projectUrl: 'https://michalowice.studio-bodyart.pl', mainImageUrl: null,
+        }] : [], []]
       }
       if (sql.includes('FROM project_translations WHERE project_id = ?')) {
+        if (String(values[0]) === '8') return [[{ locale: 'pl', title: 'Projekt roboczy', category: 'Strona', description: 'Treść szkicu.', seoTitle: null, seoDescription: null }], []]
         return [[
           { locale: 'pl', title: 'Studio BodyArt', category: 'Business website', description: 'Strona usługowa.', seoTitle: null, seoDescription: null },
           { locale: 'en', title: 'Studio BodyArt', category: 'Business website', description: 'A service website.', seoTitle: null, seoDescription: null },
@@ -87,6 +108,7 @@ function fakePool(role = 'admin') {
           if (sql.includes('GET_LOCK')) return [[{ acquired: 1 }], []]
           if (sql.includes('RELEASE_LOCK')) return [[{ released: 1 }], []]
           if (sql.includes('UNION ALL SELECT project_id')) return [[], []]
+          if (sql.includes('SELECT project_id FROM project_translations')) return values[0] === '7' ? [[{ project_id: 7 }], []] : [[], []]
           if (sql.includes('MAX(CAST(display_number AS UNSIGNED))')) return [[{ nextNumber: 5 }], []]
           if (sql.includes('MAX(sort_order)')) return [[{ nextOrder: 3 }], []]
           if (sql.includes('INSERT INTO projects')) {
@@ -233,6 +255,31 @@ test('admin project list rejects authenticated users without the admin role', as
   assert.equal((await fetch(`${base}/api/admin/projects`, { headers: { Cookie: cookie } })).status, 403)
 })
 
+test('admin catalog returns only the requested locale, including drafts when translated', async (t) => {
+  const anonymous = await startApi(t)
+  assert.equal((await fetch(`${anonymous.base}/api/admin/projects/catalog?locale=pl`)).status, 401)
+
+  const editor = await startApi(t, 'editor')
+  assert.equal((await fetch(`${editor.base}/api/admin/projects/catalog?locale=en`, { headers: { Cookie: editor.cookie } })).status, 403)
+
+  const { base, cookie } = await startApi(t)
+  for (const locale of ['pl', 'en']) {
+    const response = await fetch(`${base}/api/admin/projects/catalog?locale=${locale}`, { headers: { Cookie: cookie } })
+    assert.equal(response.status, 200)
+    const body = await response.json()
+    assert.ok(body.projects.some((project) => project.caseStudySlug === 'studio-bodyart' && project.name === 'Studio BodyArt'))
+    assert.ok(body.projects.some((project) => project.caseStudySlug === 'cimach-eu' && project.name === 'cimach.eu'))
+    assert.equal(body.projects.some((project) => project.caseStudySlug === 'draft-project'), locale === 'pl')
+    assert.ok(body.projects.every((project) => !('id' in project) && !('slug' in project) && !('projectUrl' in project)))
+    assert.ok(body.projects.every((project) => !('translations' in project) && !('gallery' in project)))
+  }
+  const publicResponse = await fetch(`${base}/api/projects?locale=pl`)
+  const publicBody = await publicResponse.json()
+  assert.equal(publicResponse.status, 200)
+  assert.equal(publicBody.projects.some((project) => project.caseStudySlug === 'draft-project'), false)
+  assert.ok(publicBody.projects.every((project) => !('id' in project) && !('status' in project)))
+})
+
 function editPayload(overrides = {}) {
   return {
     slug: 'studio-bodyart',
@@ -304,6 +351,51 @@ function createPayload(overrides = {}) {
     ...overrides,
   }
 }
+
+test('draft preview requires an administrator, keeps gallery and locale data, and stays outside public API', async (t) => {
+  const admin = await startApi(t)
+  const editor = await startApi(t, 'editor')
+  const path = '/api/admin/projects/by-slug/draft-project/preview?locale=pl'
+  assert.equal((await fetch(`${admin.base}${path}`)).status, 401)
+  assert.equal((await fetch(`${editor.base}${path}`, { headers: { Cookie: editor.cookie } })).status, 403)
+  const response = await fetch(`${admin.base}${path}`, { headers: { Cookie: admin.cookie } })
+  assert.equal(response.status, 200)
+  assert.equal(response.headers.get('cache-control'), 'no-store')
+  assert.match(response.headers.get('x-robots-tag'), /noindex/)
+  const preview = await response.json()
+  assert.equal(preview.preview, true)
+  assert.equal(preview.project.status, 'draft')
+  assert.equal(preview.project.name, 'Projekt roboczy')
+  assert.equal(preview.project.caseStudySlug, 'draft-project')
+  assert.deepEqual(preview.availableLocales, ['pl'])
+  assert.equal(preview.project.gallery.length, 1)
+  assert.ok(preview.project.gallery[0].alt)
+  assert.equal((await fetch(`${admin.base}/api/projects/draft-project?locale=pl`)).status, 404)
+  assert.equal((await fetch(`${admin.base}/api/admin/projects/by-slug/draft-project/preview?locale=en`, { headers: { Cookie: admin.cookie } })).status, 404)
+  assert.equal((await fetch(`${admin.base}/api/admin/projects/by-slug/unknown/preview?locale=pl`, { headers: { Cookie: admin.cookie } })).status, 404)
+})
+
+test('on-page project editing requires admin, validates locale content and uses a scoped transaction', async (t) => {
+  const admin = await startApi(t)
+  const editor = await startApi(t, 'editor')
+  const lookup = '/api/admin/projects/by-slug/studio-bodyart'
+  assert.equal((await fetch(`${admin.base}${lookup}`)).status, 401)
+  assert.equal((await fetch(`${editor.base}${lookup}`, { headers: { Cookie: editor.cookie } })).status, 403)
+  const detail = await fetch(`${admin.base}${lookup}`, { headers: { Cookie: admin.cookie } })
+  assert.equal(detail.status, 200)
+  assert.equal((await detail.json()).project.id, '7')
+  assert.equal((await fetch(`${admin.base}/api/admin/projects/by-slug/missing`, { headers: { Cookie: admin.cookie } })).status, 404)
+  const path = '/api/admin/projects/7/content'
+  const content = { locale: 'pl', title: 'Tytuł projektu', category: 'Strona', description: 'Opis projektu.', technologies: ['React'] }
+  assert.equal((await putJson(admin.base, path, content)).status, 401)
+  assert.equal((await putJson(editor.base, path, content, editor.cookie)).status, 403)
+  assert.equal((await fetch(`${admin.base}${path}`, { method: 'PUT', headers: { Cookie: admin.cookie, 'Content-Type': 'application/json' }, body: JSON.stringify(content) })).status, 403)
+  assert.equal((await putJson(admin.base, path, { ...content, locale: 'de' }, admin.cookie)).status, 422)
+  assert.equal((await putJson(admin.base, '/api/admin/projects/99/content', content, admin.cookie)).status, 404)
+  assert.equal((await putJson(admin.base, path, content, admin.cookie)).status, 200)
+  assert.ok(admin.pool.lastConnection.statements.includes('COMMIT'))
+  assert.equal(admin.pool.lastConnection.statements.some((sql) => sql.includes('UPDATE projects') || sql.includes('project_images')), false)
+})
 
 test('image upload and discard require admin and CSRF, optimize images and remove temporary files', async (t) => {
   const admin = await startApi(t)

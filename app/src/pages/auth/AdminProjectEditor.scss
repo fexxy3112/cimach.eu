@@ -61,6 +61,14 @@
   resize: vertical
 }
 
+.admin-project-editor--validated input:invalid,
+.admin-project-editor--validated textarea:invalid,
+.admin-project-editor--validated select:invalid {
+  border-color: var(--accent);
+  outline: 1px solid var(--accent);
+  outline-offset: 1px;
+}
+
 .admin-project-editor input:focus,
 .admin-project-editor textarea:focus,
 .admin-project-editor select:focus {
@@ -118,6 +126,9 @@
   gap: 16px;
   margin-top: 36px
 }
+
+.admin-project-editor__main-image { margin-top: 32px; }
+.admin-project-editor__image-actions { display: flex; flex-wrap: wrap; gap: 12px; }
 
 .admin-project-editor__gallery h3 {
   margin-bottom: 2px

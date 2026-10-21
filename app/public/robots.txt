@@ -1,4 +1,8 @@
 User-agent: *
 Allow: /
+Disallow: /pl/login
+Disallow: /en/login
+Disallow: /pl/admin
+Disallow: /en/admin
 
 Sitemap: https://cimach.eu/sitemap.xml

@@ -106,6 +106,23 @@ export function validateProjectStatus(req, res, next) {
   return next()
 }
 
+export function validateProjectContent(req, res, next) {
+  const body = req.body
+  const fields = {}
+  if (!body || !['pl', 'en'].includes(body.locale)) fields.locale = 'invalid'
+  for (const [field, limit] of [['title', 255], ['category', 255], ['description', 20000]]) {
+    if (typeof body?.[field] !== 'string' || !body[field].trim() || body[field].length > limit) fields[field] = 'invalid'
+  }
+  if (!Array.isArray(body?.technologies) || body.technologies.length > 30 ||
+      body.technologies.some((value) => typeof value !== 'string' || !value.trim() || value.length > 100)) fields.technologies = 'invalid'
+  if (Object.keys(fields).length) return res.status(422).json({ error: 'validation_failed', fields })
+  req.validatedContent = {
+    locale: body.locale, title: body.title.trim(), category: body.category.trim(),
+    description: body.description.trim(), technologies: body.technologies.map((value) => value.trim()),
+  }
+  return next()
+}
+
 export function validateProjectCreate(req, res, next) {
   return validateProjectPayload(req, res, next, { requireSortOrder: false })
 }

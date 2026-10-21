@@ -6,10 +6,11 @@ import type { SeoPage } from '../seo'
 
 const apiBase = import.meta.env.VITE_API_BASE_URL || '/api'
 
-export function SiteHeader({ activePage, projectSlug, projectLocales }: {
+export function SiteHeader({ activePage, projectSlug, projectLocales, projectPreview }: {
   activePage: SeoPage
   projectSlug?: string
   projectLocales?: Locale[]
+  projectPreview?: boolean
 }) {
   const [isMenuOpen, setIsMenuOpen] = useState(false)
   const [isAdmin, setIsAdmin] = useState(false)
@@ -17,7 +18,7 @@ export function SiteHeader({ activePage, projectSlug, projectLocales }: {
   const portfolio = getPortfolio(locale)
   const homePath = `/${locale}/`
   const languagePath = (nextLocale: 'pl' | 'en') => activePage === 'project' && projectSlug && projectLocales?.includes(nextLocale)
-    ? `/${nextLocale}/projects/${projectSlug}/`
+    ? projectPreview ? `/${nextLocale}/admin/projects/${projectSlug}/preview/` : `/${nextLocale}/projects/${projectSlug}/`
     : activePage === 'projects' ? `/${nextLocale}/projects/` : `/${nextLocale}/`
   const copy = locale === 'pl'
     ? { nav: ['Projekty', 'O mnie', 'Fotografia', 'Kontakt'], admin: 'Panel zarządzania', navLabel: 'Nawigacja główna', theme: 'Zmień motyw', close: 'Zamknij menu', open: 'Otwórz menu', switchLanguage: 'Zmień język' }

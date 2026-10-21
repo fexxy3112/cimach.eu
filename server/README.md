@@ -65,7 +65,13 @@ cd server && npm ci && npm run db:migrate
 
 Required variables are `NODE_ENV`, `PORT`, `FRONTEND_ORIGIN`, `JWT_SECRET_BASE64`, `JWT_ISSUER`, `JWT_AUDIENCE`, `JWT_ACCESS_TTL_SECONDS`, `DB_HOST`, `DB_PORT`, `DB_DATABASE`, `DB_USERNAME`, `DB_PASSWORD`, `DB_CONNECTION_LIMIT`, `TRUST_PROXY_CIDRS`, `AUTH_COOKIE_NAME`, `AUTH_COOKIE_SAME_SITE`, and `AUTH_COOKIE_DOMAIN`. For local Vite, use `NODE_ENV=development`, `FRONTEND_ORIGIN=http://localhost:5173`, `PORT=3001`, and a local MySQL connection. Generate at least 32 random bytes for `JWT_SECRET_BASE64`. Production additionally requires HTTPS for `FRONTEND_ORIGIN` and explicit `TRUST_PROXY_CIDRS`. `.env` and `.env.example` are ignored by Git in this repository because a filled example file previously exposed credentials; do not force-add them.
 
-## Image uploads
+## Administrator project preview
+
+Authenticated administrators can open `/{pl|en}/admin/projects/{slug}/preview/` from the CMS project list, including drafts. Apache serves the existing admin HTML shell at that private path; the browser then loads `GET /api/admin/projects/by-slug/:slug/preview?locale=pl|en`. The endpoint requires an active admin session, disables caching, and sets `X-Robots-Tag: noindex, nofollow, noarchive`. It returns 404 for missing projects or missing translations. Preview routes are excluded from prerendering and sitemap generation. The on-page visibility control uses the existing admin-only status endpoint; unpublishing also clears featured state.
+
+The API applies visibility changes immediately. Deployed static HTML from an earlier build must still be rebuilt and replaced when unpublishing; changing a database status does not remove files already deployed to Apache. Previewing does not trigger a production build.
+
+## Image upload lifecycle
 
 Administrators upload JPEG, PNG, or WebP images through `POST /api/admin/uploads` using the existing authenticated session and CSRF header. The API validates the actual image content, limits source files to 10 MB and 40 megapixels, applies EXIF orientation, scales images down to at most 2400 × 2400 pixels, and stores optimized WebP files at quality 82. It returns a same-origin `/api/uploads/<random-name>.webp` URL. The browser sends only that URL and localized alt text to the existing project create/update endpoints; image bytes are not stored in MySQL.
 

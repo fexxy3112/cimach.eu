@@ -12,13 +12,14 @@ export function ProjectRow({ project, locale, position }: { project: PublicProje
       <div className="work-name">
         <h3>{project.name}</h3>
         <span>{project.category}</span>
+        {project.status === 'draft' && <span className="work-draft">{locale === 'pl' ? 'Szkic · tylko administrator' : 'Draft · admin only'}</span>}
       </div>
       <p>{project.description}</p>
       <div className="tags">{project.technologies.map((technology) => <span key={technology}>{technology}</span>)}</div>
       {project.caseStudySlug && <span className="work-arrow"><ArrowUpRight /></span>}
     </>
   return project.caseStudySlug
-    ? <Reveal as="a" className="work-item" href={`/${locale}/projects/${encodeURIComponent(project.caseStudySlug)}/`} draggable={false}>{content}</Reveal>
+    ? <Reveal as="a" className="work-item" href={project.status === 'draft' ? `/${locale}/admin/projects/${encodeURIComponent(project.caseStudySlug)}/preview/` : `/${locale}/projects/${encodeURIComponent(project.caseStudySlug)}/`} draggable={false}>{content}</Reveal>
     : <Reveal as="div" className="work-item" aria-disabled="true">{content}</Reveal>
 }
 

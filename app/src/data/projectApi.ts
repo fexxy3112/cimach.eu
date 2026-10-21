@@ -1,6 +1,7 @@
 import type { Locale } from '../i18n/LocaleContext'
 
 export type PublicProject = {
+  status?: 'draft' | 'published'
   number: string
   name: string
   category: string
@@ -26,6 +27,7 @@ export type PublicProjectCatalogData = {
 }
 
 export type PublicProjectPageData = {
+  preview?: boolean
   kind: 'project'
   locale: Locale
   slug: string
@@ -37,6 +39,16 @@ export type PrerenderData = PublicProjectCatalogData | PublicProjectPageData
 
 type ProjectListResponse = { projects: PublicProject[] }
 type ProjectDetailResponse = { project: PublicProjectDetail }
+
+export async function loadAdminProjectPreview(locale: Locale, slug: string, apiBase: string, fetcher: typeof fetch = fetch, signal?: AbortSignal): Promise<PublicProjectPageData | null> {
+  const url = apiUrl(apiBase, `/admin/projects/by-slug/${encodeURIComponent(slug)}/preview?locale=${locale}`)
+  const response = await fetcher(url, { credentials: 'include', cache: 'no-store', signal })
+  if (response.status === 404) return null
+  if (response.status === 401 || response.status === 403) throw new Error('preview_unauthorized')
+  const data = await readJson<PublicProjectPageData>(response, url)
+  if (!data.preview || data.locale !== locale || data.slug !== slug || data.project.caseStudySlug !== slug) return null
+  return data
+}
 
 async function readJson<T>(response: Response, url: string): Promise<T> {
   if (!response.ok) throw new Error(`Project API request failed (${response.status}): ${url}`)

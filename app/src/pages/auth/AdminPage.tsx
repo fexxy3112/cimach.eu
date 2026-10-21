@@ -467,6 +467,7 @@ export function AdminPage() {
                                 </td>
                                 <td data-label={copy.order}>{project.sortOrder}</td>
                                 <td data-label={copy.actions} className="admin-projects__row-actions">
+                                  {project.slug && <a className="admin-projects__text-action" href={`/${locale}/admin/projects/${encodeURIComponent(project.slug)}/preview/`}>{locale === 'pl' ? 'Podgląd' : 'Preview'}</a>}
                                   {project.status === 'published' && <button className="admin-projects__text-action" type="button" onClick={() => updateFeatured(project.id, !project.isFeatured)} disabled={isSavingFeatured || savingStatusProjectId !== null || isRefreshing || isLoggingOut}>
                                     {project.isFeatured ? copy.removeFeatured : copy.addFeatured}
                                   </button>}

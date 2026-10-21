@@ -5,11 +5,12 @@ import { SectionMap } from '../components/SectionMap'
 import type { SeoPage } from '../seo'
 import type { Locale } from '../i18n/LocaleContext'
 
-export function SiteLayout({ children, activePage, projectSlug, projectLocales }: {
+export function SiteLayout({ children, activePage, projectSlug, projectLocales, projectPreview }: {
   children: ReactNode
   activePage: SeoPage
   projectSlug?: string
   projectLocales?: Locale[]
+  projectPreview?: boolean
 }) {
   const progressRef = useRef<HTMLSpanElement>(null)
 
@@ -35,7 +36,7 @@ export function SiteLayout({ children, activePage, projectSlug, projectLocales }
   return (
     <>
       <div className="progress" aria-hidden="true"><span ref={progressRef} /></div>
-      <SiteHeader activePage={activePage} projectSlug={projectSlug} projectLocales={projectLocales} />
+      <SiteHeader activePage={activePage} projectSlug={projectSlug} projectLocales={projectLocales} projectPreview={projectPreview} />
       {activePage === 'home' && <SectionMap />}
       {children}
       <SiteFooter />

@@ -1,5 +1,31 @@
 export function createProjectController(projectService) {
   return {
+    async adminCatalog(req, res, next) {
+      try { return res.json(await projectService.catalogForAdmin(req.projectLocale)) }
+      catch (error) { return next(error) }
+    },
+    async adminPreview(req, res, next) {
+      res.set('X-Robots-Tag', 'noindex, nofollow, noarchive')
+      try {
+        const preview = await projectService.previewForAdmin(req.params.slug, req.projectLocale)
+        if (!preview) return res.status(404).json({ error: 'not_found' })
+        return res.json(preview)
+      } catch (error) { return next(error) }
+    },
+    async adminDetailBySlug(req, res, next) {
+      try {
+        const project = await projectService.findForAdminBySlug(req.params.slug)
+        if (!project) return res.status(404).json({ error: 'not_found' })
+        return res.json({ project })
+      } catch (error) { return next(error) }
+    },
+    async adminUpdateContent(req, res, next) {
+      try {
+        const updated = await projectService.updateContentForAdmin(req.params.id, req.validatedContent)
+        if (!updated) return res.status(404).json({ error: 'not_found' })
+        return res.json({ saved: true })
+      } catch (error) { return next(error) }
+    },
     async adminUpdateStatus(req, res, next) {
       try {
         const updated = await projectService.updateStatusForAdmin(req.params.id, req.validatedProjectStatus)

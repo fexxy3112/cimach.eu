@@ -27,6 +27,8 @@ DirectoryIndex index.html
   RewriteRule ^ - [L]
 
   # Only the two published language routes are valid application pages.
+  # Private previews use the admin shell; their content is fetched only after API authorization.
+  RewriteRule ^(pl|en)/admin/projects/([a-z0-9]+(?:-[a-z0-9]+)*)/preview/?$ $1/admin/index.html [L]
   RewriteRule ^(?:pl|en)$ $0/ [R=301,L]
   RewriteRule ^(?!pl/|en/|404\.html$|robots\.txt$|sitemap\.xml$).+ - [R=404,L]
 </IfModule>

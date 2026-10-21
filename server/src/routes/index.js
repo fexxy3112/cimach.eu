@@ -7,7 +7,7 @@ import { createImageUploadController } from '../controllers/image-upload.control
 import { receiveImageUpload } from '../middleware/image-upload.middleware.js'
 import { createProjectService } from '../services/project.service.js'
 import { createUploadService } from '../services/upload.service.js'
-import { validateFeaturedSelection, validateProjectCreate, validateProjectId, validateProjectStatus, validateProjectUpdate } from '../validators/project.validator.js'
+import { validateFeaturedSelection, validateProjectContent, validateProjectCreate, validateProjectId, validateProjectLocale, validateProjectStatus, validateProjectUpdate } from '../validators/project.validator.js'
 import { createAuthRouter } from './auth.routes.js'
 import { createProjectRouter } from './project.routes.js'
 
@@ -27,11 +27,15 @@ export function createApiRouter({ authService, config, pool }) {
     res.json({ user: { id: req.auth.userId, email: req.auth.email, role: req.auth.role } })
   })
   router.get('/admin/projects', authenticate, requireRole('admin'), projectController.adminList)
+  router.get('/admin/projects/catalog', authenticate, requireRole('admin'), validateProjectLocale, projectController.adminCatalog)
+  router.get('/admin/projects/by-slug/:slug', authenticate, requireRole('admin'), projectController.adminDetailBySlug)
+  router.get('/admin/projects/by-slug/:slug/preview', authenticate, requireRole('admin'), validateProjectLocale, projectController.adminPreview)
   router.post('/admin/uploads', authenticate, requireRole('admin'), receiveImageUpload, imageUploadController.upload)
   router.post('/admin/uploads/discard', authenticate, requireRole('admin'), imageUploadController.discard)
   router.post('/admin/projects', authenticate, requireRole('admin'), validateProjectCreate, projectController.adminCreate)
   router.put('/admin/projects/featured', authenticate, requireRole('admin'), validateFeaturedSelection, projectController.adminUpdateFeatured)
   router.get('/admin/projects/:id', authenticate, requireRole('admin'), validateProjectId, projectController.adminDetail)
+  router.put('/admin/projects/:id/content', authenticate, requireRole('admin'), validateProjectId, validateProjectContent, projectController.adminUpdateContent)
   router.put('/admin/projects/:id/status', authenticate, requireRole('admin'), validateProjectId, validateProjectStatus, projectController.adminUpdateStatus)
   router.put('/admin/projects/:id', authenticate, requireRole('admin'), validateProjectId, validateProjectUpdate, projectController.adminUpdate)
   return router

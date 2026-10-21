@@ -17,16 +17,16 @@ function mapProject(row, technologies = []) {
   }
 }
 
-async function findPublishedProjects(pool, locale, featuredOnly) {
+async function findPublishedProjects(pool, locale, featuredOnly, includeDrafts = false) {
   const [rows] = await pool.execute(
     `SELECT p.id, p.display_number AS number, p.slug AS caseStudySlug,
             p.project_url AS href, p.main_image_url AS mainImage,
             CASE WHEN t.locale = 'pl' THEN p.main_image_alt_pl ELSE p.main_image_alt_en END AS mainImageAlt,
-            t.title AS name, t.category, t.description,
+            p.status, t.title AS name, t.category, t.description,
             t.seo_title AS seoTitle, t.seo_description AS seoDescription
      FROM projects p
      INNER JOIN project_translations t ON t.project_id = p.id AND t.locale = ?
-     WHERE p.status = 'published'${featuredOnly ? ' AND p.is_featured = 1' : ''}
+     WHERE ${includeDrafts ? "p.status IN ('published', 'draft')" : "p.status = 'published'"}${featuredOnly ? ' AND p.is_featured = 1' : ''}
      ORDER BY ${featuredOnly ? 'p.featured_order ASC, ' : ''}p.sort_order ASC, p.id ASC`,
     [locale],
   )
@@ -47,7 +47,7 @@ async function findPublishedProjects(pool, locale, featuredOnly) {
     list.push(row.label)
     technologiesByProject.set(key, list)
   }
-  return rows.map((row) => mapProject(row, technologiesByProject.get(String(row.id)) || []))
+  return rows.map((row) => ({ ...mapProject(row, technologiesByProject.get(String(row.id)) || []), ...(includeDrafts ? { status: row.status } : {}) }))
 }
 
 function duplicateSlugError(error) {
@@ -59,6 +59,31 @@ function duplicateSlugError(error) {
 
 export function createProjectModel(pool) {
   return {
+    async updateContent(id, content) {
+      const connection = await pool.getConnection()
+      try {
+        await connection.beginTransaction()
+        const [rows] = await connection.execute(
+          'SELECT project_id FROM project_translations WHERE project_id = ? AND locale = ? FOR UPDATE',
+          [id, content.locale],
+        )
+        if (!rows.length) { await connection.rollback(); return false }
+        await connection.execute(
+          'UPDATE project_translations SET title = ?, category = ?, description = ? WHERE project_id = ? AND locale = ?',
+          [content.title, content.category, content.description, id, content.locale],
+        )
+        await connection.execute('DELETE FROM project_technologies WHERE project_id = ? AND locale = ?', [id, content.locale])
+        for (const [order, label] of content.technologies.entries()) {
+          await connection.execute('INSERT INTO project_technologies (project_id, locale, sort_order, label) VALUES (?, ?, ?, ?)', [id, content.locale, order, label])
+        }
+        await connection.commit()
+        return true
+      } catch (error) {
+        await connection.rollback()
+        throw error
+      } finally { connection.release() }
+    },
+
     async updateStatus(id, status) {
       const [result] = await pool.execute(
         `UPDATE projects SET status = ?,
@@ -98,7 +123,7 @@ export function createProjectModel(pool) {
 
     async findAdminById(id) {
       const [rows] = await pool.execute(
-        `SELECT id, slug, project_url AS projectUrl, main_image_url AS mainImageUrl,
+        `SELECT id, display_number AS number, slug, project_url AS projectUrl, main_image_url AS mainImageUrl,
                 main_image_alt_pl AS mainImageAltPl, main_image_alt_en AS mainImageAltEn,
                 status, sort_order AS sortOrder
          FROM projects WHERE id = ? LIMIT 1`,
@@ -135,6 +160,7 @@ export function createProjectModel(pool) {
       }
       return {
         id: String(rows[0].id),
+        number: rows[0].number,
         slug: rows[0].slug,
         projectUrl: rows[0].projectUrl,
         mainImageUrl: rows[0].mainImageUrl,
@@ -305,6 +331,9 @@ export function createProjectModel(pool) {
 
     async findFeatured(locale) {
       return findPublishedProjects(pool, locale, true)
+    },
+    async findAdminCatalog(locale) {
+      return findPublishedProjects(pool, locale, false, true)
     },
 
     async findAllPublished(locale) {

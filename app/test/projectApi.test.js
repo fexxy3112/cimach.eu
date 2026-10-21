@@ -7,6 +7,7 @@ import ts from 'typescript'
 let loadPublicProjectCatalog
 let loadAllPublicProjectCatalog
 let loadPublicProjectPage
+let loadAdminProjectPreview
 
 before(async () => {
   const source = await readFile(resolve(process.cwd(), 'src/data/projectApi.ts'), 'utf8')
@@ -14,7 +15,7 @@ before(async () => {
     compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 },
   })
   const moduleUrl = `data:text/javascript;base64,${Buffer.from(outputText).toString('base64')}`
-  ;({ loadPublicProjectCatalog, loadAllPublicProjectCatalog, loadPublicProjectPage } = await import(moduleUrl))
+  ;({ loadPublicProjectCatalog, loadAllPublicProjectCatalog, loadPublicProjectPage, loadAdminProjectPreview } = await import(moduleUrl))
 })
 
 const project = {
@@ -35,6 +36,26 @@ test('loads the published project catalog by locale', async () => {
   assert.equal(catalog.kind, 'catalog')
   assert.equal(catalog.scope, 'featured')
   assert.equal(catalog.projects[0].caseStudySlug, 'new-project-17')
+})
+
+test('admin preview uses credentials and disables caching while preserving actual available languages', async () => {
+  const data = { kind: 'project', preview: true, locale: 'pl', slug: project.caseStudySlug, availableLocales: ['pl'], project: { ...project, status: 'draft' } }
+  const result = await loadAdminProjectPreview('pl', project.caseStudySlug, '/api', async (url, options) => {
+    assert.equal(url, '/api/admin/projects/by-slug/new-project-17/preview?locale=pl')
+    assert.equal(options.credentials, 'include')
+    assert.equal(options.cache, 'no-store')
+    return new Response(JSON.stringify(data))
+  })
+  assert.deepEqual(result, data)
+})
+
+test('admin preview rejects unauthorized users, missing translations and mismatched records', async () => {
+  for (const status of [401, 403]) {
+    await assert.rejects(loadAdminProjectPreview('pl', 'draft', '/api', async () => new Response('{}', { status })), /preview_unauthorized/)
+  }
+  assert.equal(await loadAdminProjectPreview('en', 'draft', '/api', async () => new Response('{}', { status: 404 })), null)
+  const wrong = { kind: 'project', preview: true, locale: 'pl', slug: 'different', project }
+  assert.equal(await loadAdminProjectPreview('pl', 'draft', '/api', async () => new Response(JSON.stringify(wrong))), null)
 })
 
 test('loads all published projects separately from featured homepage catalog', async () => {

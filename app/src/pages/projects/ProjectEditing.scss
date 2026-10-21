@@ -1,0 +1,87 @@
+.project-edit__toolbar {
+  position: sticky;
+  top: calc(var(--header-height) + 8px);
+  z-index: 30;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  margin-bottom: 20px;
+  border: 1px solid var(--line);
+  background: var(--panel);
+  color: var(--ink);
+  font: 11px var(--font-mono);
+}
+
+.project-edit__toolbar button,
+.project-edit__add {
+  padding: 8px 12px;
+  border: 1px solid var(--line);
+  background: transparent;
+  color: var(--ink);
+  cursor: pointer;
+  font: inherit;
+}
+
+.project-edit__toolbar button:hover,
+.project-edit__add:hover {
+  border-color: var(--accent);
+}
+
+.project-edit__toolbar [role='alert'] { flex-basis: 100%; }
+.project-edit__status {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.project-edit__status select {
+  padding: 8px;
+  border: 1px solid var(--line);
+  background: var(--panel);
+  color: var(--ink);
+  font: inherit;
+}
+.project-edit__toolbar button:disabled { cursor: wait; opacity: .6; }
+
+.project-edit__text {
+  display: inline-block;
+  min-width: 1ch;
+  max-width: 100%;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  outline: 1px dashed var(--line);
+  outline-offset: 4px;
+  cursor: text;
+}
+
+.project-edit__text:empty::before { content: attr(data-placeholder); opacity: .5; }
+.project-edit__text:focus { outline-color: var(--accent); }
+.project-detail .tags .project-edit__text {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  font: inherit;
+}
+.project-edit__text[aria-disabled='true'] { cursor: wait; }
+
+.project-edit__remove {
+  margin-left: 8px;
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.project-edit__settings {
+  width: min(1000px, calc(100% - 32px));
+  max-height: 90dvh;
+  padding: 24px;
+  border: 1px solid var(--line);
+  background: var(--panel);
+  color: var(--ink);
+}
+
+.project-edit__settings::backdrop { background: rgb(0 0 0 / .5); }
+.project-edit__settings .admin-project-editor { margin-top: 0; padding-top: 0; border-top: 0; }

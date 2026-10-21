@@ -12,12 +12,13 @@ import {
   loadPublicProjectCatalog,
   loadAllPublicProjectCatalog,
   loadPublicProjectPage,
+  loadAdminProjectPreview,
   type PrerenderData,
   type PublicProjectCatalogData,
   type PublicProjectPageData,
 } from '../data/projectApi'
 
-type AppRoute = { locale: Locale; page: SeoPage; projectSlug?: string }
+type AppRoute = { locale: Locale; page: SeoPage; projectSlug?: string; preview?: boolean }
 type RequestState = { key: string; status: 'loading' | 'error' | 'not-found' }
 
 function updateLink(selector: string, href: string | null) {
@@ -65,6 +66,8 @@ function applySeoMetadata(pageSeo: ReturnType<typeof getSeo>, robots: string) {
 }
 
 function routeFromPath(pathname: string): AppRoute | null {
+  const preview = pathname.match(/^\/(pl|en)\/admin\/projects\/([^/]+)\/preview\/?$/)
+  if (preview) return { locale: preview[1] as Locale, page: 'project', projectSlug: preview[2], preview: true }
   const match = pathname.match(/^\/(pl|en)(?:\/projects(?:\/([^/]+))?|\/login|\/admin)?\/?$/)
   if (!match) return null
   const projectSlug = match[2]
@@ -82,8 +85,8 @@ function matchesCatalog(data: PrerenderData | undefined, locale: Locale, page: S
   return data?.kind === 'catalog' && data.locale === locale && (data.scope ?? 'featured') === (page === 'projects' ? 'all' : 'featured')
 }
 
-function matchesProject(data: PrerenderData | undefined, locale: Locale, slug: string | undefined): data is PublicProjectPageData {
-  return data?.kind === 'project' && data.locale === locale && data.slug === slug
+function matchesProject(data: PrerenderData | undefined, locale: Locale, slug: string | undefined, preview = false): data is PublicProjectPageData {
+  return data?.kind === 'project' && data.locale === locale && data.slug === slug && (data.preview ?? false) === preview
 }
 
 export default function App({
@@ -98,7 +101,7 @@ export default function App({
   const [pageData, setPageData] = useState<PrerenderData | undefined>(initialData)
   const [requestState, setRequestState] = useState<RequestState | undefined>()
   const requestKey = route.page === 'project'
-    ? `${route.locale}:project:${route.projectSlug}`
+    ? `${route.locale}:project:${route.projectSlug}:${route.preview ?? false}`
     : `${route.locale}:catalog:${route.page}`
 
   useEffect(() => {
@@ -118,7 +121,7 @@ export default function App({
     return () => window.removeEventListener('popstate', syncRoute)
   }, [])
 
-  const currentProjectPage = route.page === 'project' && matchesProject(pageData, route.locale, route.projectSlug)
+  const currentProjectPage = route.page === 'project' && matchesProject(pageData, route.locale, route.projectSlug, route.preview)
     ? pageData
     : undefined
   const currentCatalog = (route.page === 'home' || route.page === 'projects') && matchesCatalog(pageData, route.locale, route.page)
@@ -128,7 +131,7 @@ export default function App({
 
   useEffect(() => {
     if ((route.page === 'home' || route.page === 'projects') && matchesCatalog(pageData, route.locale, route.page)) return
-    if (route.page === 'project' && matchesProject(pageData, route.locale, route.projectSlug)) return
+    if (route.page === 'project' && matchesProject(pageData, route.locale, route.projectSlug, route.preview)) return
     if (route.page !== 'home' && route.page !== 'projects' && route.page !== 'project') return
 
     const controller = new AbortController()
@@ -137,7 +140,8 @@ export default function App({
     const request = route.page === 'home'
       ? loadPublicProjectCatalog(route.locale, apiBase, fetch, controller.signal)
       : route.page === 'projects' ? loadAllPublicProjectCatalog(route.locale, apiBase, fetch, controller.signal)
-        : loadPublicProjectPage(route.locale, route.projectSlug!, apiBase, fetch, controller.signal)
+        : route.preview ? loadAdminProjectPreview(route.locale, route.projectSlug!, apiBase, fetch, controller.signal)
+          : loadPublicProjectPage(route.locale, route.projectSlug!, apiBase, fetch, controller.signal)
     request.then((data) => {
       if (controller.signal.aborted) return
       if (data === null) {
@@ -146,13 +150,24 @@ export default function App({
       }
       setPageData(data)
       setRequestState(undefined)
-    }).catch(() => {
+    }).catch((cause: unknown) => {
+      if (!controller.signal.aborted && route.preview && cause instanceof Error && cause.message === 'preview_unauthorized') {
+        window.location.replace(`/${route.locale}/login/?expired=1`)
+        return
+      }
       if (!controller.signal.aborted) setRequestState({ key: requestKey, status: 'error' })
     })
     return () => controller.abort()
-  }, [route.locale, route.page, route.projectSlug, requestKey, pageData?.kind, pageData?.locale, pageData?.kind === 'project' ? pageData.slug : undefined])
+  }, [route.locale, route.page, route.projectSlug, route.preview, requestKey, pageData?.kind, pageData?.locale, pageData?.kind === 'project' ? pageData.slug : undefined])
 
   useEffect(() => {
+    if (route.preview) {
+      document.title = `${route.locale === 'pl' ? 'Podgląd projektu' : 'Project preview'} | CIMACH`
+      updateMeta('meta[name="robots"]', 'noindex, nofollow, noarchive')
+      updateLink('link[rel="canonical"]', null)
+      for (const language of ['pl', 'en', 'x-default']) updateLink(`link[rel="alternate"][hreflang="${language}"]`, null)
+      return
+    }
     if (route.page === 'project' && currentProjectPage) {
       applySeoMetadata(
         getSeo(route.locale, 'project', currentProjectPage.project, route.projectSlug, currentProjectPage.availableLocales),
@@ -179,7 +194,7 @@ export default function App({
         : 'index, follow, max-image-preview:large'
       applySeoMetadata(pageSeo, robots)
     }
-  }, [route.locale, route.page, route.projectSlug, currentProjectPage, currentRequest])
+  }, [route.locale, route.page, route.projectSlug, route.preview, currentProjectPage, currentRequest])
 
   const projectLoading = route.page === 'project' && !currentProjectPage && currentRequest !== 'error' && currentRequest !== 'not-found'
   const projectError = route.page === 'project' && currentRequest === 'error'
@@ -193,9 +208,10 @@ export default function App({
             activePage={route.page}
             projectSlug={route.projectSlug}
             projectLocales={currentProjectPage?.availableLocales}
+            projectPreview={route.preview}
           >
             {route.page === 'project'
-              ? <ProjectPage project={currentProjectPage?.project ?? null} loading={projectLoading} error={projectError} notFound={projectNotFound} />
+              ? <ProjectPage project={currentProjectPage?.project ?? null} preview={route.preview} loading={projectLoading} error={projectError} notFound={projectNotFound} onProjectUpdated={(project) => { if (currentProjectPage) setPageData({ ...currentProjectPage, project }) }} />
               : route.page === 'projects'
                 ? <ProjectsPage projects={currentCatalog?.projects ?? []} loading={!currentCatalog && currentRequest !== 'error'} error={currentRequest === 'error'} />
                 : <HomePage projects={currentCatalog?.projects ?? []} loading={route.page === 'home' && !currentCatalog && currentRequest !== 'error'} error={route.page === 'home' && currentRequest === 'error'} />}
