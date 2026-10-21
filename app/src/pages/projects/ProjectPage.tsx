@@ -23,7 +23,10 @@ export function ProjectPage({ project, loading, error, notFound }: {
   useEffect(() => {
     const titleSection = titleSectionRef.current
     const back = backRef.current
-    if (!titleSection || !back) return
+    if (!project || !titleSection || !back) {
+      setIsBackCompact(false)
+      return
+    }
 
     let frame = 0
     const updateBackState = () => {
@@ -50,7 +53,7 @@ export function ProjectPage({ project, loading, error, notFound }: {
       window.removeEventListener('scroll', updateBackState)
       window.removeEventListener('resize', updateBackState)
     }
-  }, [])
+  }, [project])
 
   if (!project) {
     if (notFound) {

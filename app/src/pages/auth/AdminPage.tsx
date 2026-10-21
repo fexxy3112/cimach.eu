@@ -31,6 +31,9 @@ export function AdminPage() {
   const [featuredLimit, setFeaturedLimit] = useState(3)
   const [isSavingFeatured, setIsSavingFeatured] = useState(false)
   const [editingProjectId, setEditingProjectId] = useState<string | null>(null)
+  const [editingStatusProjectId, setEditingStatusProjectId] = useState<string | null>(null)
+  const [savingStatusProjectId, setSavingStatusProjectId] = useState<string | null>(null)
+  const [statusError, setStatusError] = useState('')
   const [isCreatingProject, setIsCreatingProject] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
   const [isLoggingOut, setIsLoggingOut] = useState(false)
@@ -41,6 +44,8 @@ export function AdminPage() {
         logoutError: 'Wylogowanie nie powiodło się. Spróbuj ponownie.', projects: 'Projekty', featuredProjects: 'Wyróżnione projekty', allProjects: 'Wszystkie projekty',
         project: 'Tytuł PL', englishTitle: 'Tytuł EN', slug: 'Slug', status: 'Status', order: 'Kolejność',
         published: 'Opublikowany', draft: 'Szkic', noProjects: 'Brak projektów.',
+        editStatus: 'Kliknij dwukrotnie, aby edytować status',
+        statusError: 'Nie udało się zmienić statusu projektu.',
         projectsUnavailable: 'Nie udało się pobrać listy projektów.',
         featuredHelp: 'Możesz oznaczyć maksymalnie {limit} opublikowanych projektów. Przeciągnij zaznaczone projekty, aby ustawić ich kolejność.',
         saveFeatured: 'Zapisz wyróżnione projekty', featuredSaved: 'Zapisano kolejność projektów na stronie głównej.',
@@ -53,6 +58,8 @@ export function AdminPage() {
         logoutError: 'Sign out failed. Please try again.', projects: 'Projects', featuredProjects: 'Featured projects', allProjects: 'All projects',
         project: 'Title PL', englishTitle: 'Title EN', slug: 'Slug', status: 'Status', order: 'Order',
         published: 'Published', draft: 'Draft', noProjects: 'No projects found.',
+        editStatus: 'Double-click to edit status',
+        statusError: 'Could not update the project status.',
         projectsUnavailable: 'Could not load the project list.',
         featuredHelp: 'Choose up to {limit} published projects. Drag selected projects to change their order.',
         saveFeatured: 'Save featured projects', featuredSaved: 'Homepage project order saved.',
@@ -285,6 +292,44 @@ export function AdminPage() {
     }
   }
 
+  async function updateProjectStatus(project: AdminProject, status: AdminProject['status']) {
+    if (savingStatusProjectId) return
+    setSavingStatusProjectId(project.id)
+    setStatusError('')
+    try {
+      const detailResponse = await fetch(`${apiBase}/admin/projects/${encodeURIComponent(project.id)}`, {
+        credentials: 'include',
+        cache: 'no-store',
+      })
+      if (detailResponse.status === 401 || detailResponse.status === 403) {
+        window.location.replace(`/${locale}/login/?expired=1`)
+        return
+      }
+      if (!detailResponse.ok) throw new Error('project_load_failed')
+      const detail = await detailResponse.json() as { project: Record<string, unknown> }
+      const response = await fetch(`${apiBase}/admin/projects/${encodeURIComponent(project.id)}`, {
+        method: 'PUT',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json', 'X-CIMACH-CSRF': '1' },
+        body: JSON.stringify({ ...detail.project, status }),
+      })
+      if (response.status === 401 || response.status === 403) {
+        window.location.replace(`/${locale}/login/?expired=1`)
+        return
+      }
+      if (!response.ok) throw new Error('project_update_failed')
+      setProjects((current) => current?.map((item) => item.id === project.id
+        ? { ...item, status, ...(status === 'draft' ? { isFeatured: false, featuredOrder: null } : {}) }
+        : item) ?? null)
+      if (status === 'draft') setSavedFeaturedIds((current) => current.filter((id) => id !== project.id))
+      setEditingStatusProjectId(null)
+    } catch {
+      setStatusError(copy.statusError)
+    } finally {
+      setSavingStatusProjectId(null)
+    }
+  }
+
   return (
     <main className="admin-page">
       <section className="admin-page__content" aria-labelledby="admin-title">
@@ -354,6 +399,7 @@ export function AdminPage() {
                   </section>
                   <section className="admin-projects__group" aria-labelledby="admin-all-projects-title">
                     <h2 id="admin-all-projects-title" className="eyebrow">{copy.allProjects}</h2>
+                    {statusError && <p className="admin-page__message" role="alert">{statusError}</p>}
                     {projects?.length
                       ? <table className="admin-projects__table">
                           <thead>
@@ -373,9 +419,35 @@ export function AdminPage() {
                                 <td data-label={copy.englishTitle}>{project.titleEn || '—'}</td>
                                 <td data-label={copy.slug}><code>{project.slug || '—'}</code></td>
                                 <td data-label={copy.status}>
-                                  <span className={`admin-projects__status admin-projects__status--${project.status}`}>
-                                    {project.status === 'published' ? copy.published : copy.draft}
-                                  </span>
+                                  {editingStatusProjectId === project.id
+                                    ? <select
+                                        className="admin-projects__status-select"
+                                        aria-label={copy.status}
+                                        autoFocus
+                                        disabled={savingStatusProjectId !== null}
+                                        value={project.status}
+                                        onBlur={() => { if (!savingStatusProjectId) setEditingStatusProjectId(null) }}
+                                        onChange={(event) => void updateProjectStatus(project, event.target.value as AdminProject['status'])}
+                                      >
+                                        <option value="draft">{copy.draft}</option>
+                                        <option value="published">{copy.published}</option>
+                                      </select>
+                                    : <span
+                                        className={`admin-projects__status admin-projects__status--${project.status}`}
+                                        role="button"
+                                        tabIndex={0}
+                                        title={copy.editStatus}
+                                        onDoubleClick={() => { setStatusError(''); setEditingStatusProjectId(project.id) }}
+                                        onKeyDown={(event) => {
+                                          if (event.key === 'Enter' || event.key === ' ') {
+                                            event.preventDefault()
+                                            setStatusError('')
+                                            setEditingStatusProjectId(project.id)
+                                          }
+                                        }}
+                                      >
+                                        {project.status === 'published' ? copy.published : copy.draft}
+                                      </span>}
                                 </td>
                                 <td data-label={copy.order}>{project.sortOrder}</td>
                                 <td data-label={copy.actions} className="admin-projects__row-actions">
