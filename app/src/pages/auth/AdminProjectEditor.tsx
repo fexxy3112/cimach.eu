@@ -1,5 +1,6 @@
-import { useEffect, useState, type FormEvent } from 'react'
+import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { useLocale } from '../../i18n/LocaleContext'
+import { LoadingSpinner } from '../../components/LoadingSpinner'
 import './AdminProjectEditor.scss'
 
 const apiBase = import.meta.env.VITE_API_BASE_URL || '/api'
@@ -34,11 +35,12 @@ const emptyProject = (sortOrder: number): ProjectDraft => ({
   gallery: [],
 })
 
-export function AdminProjectEditor({ projectId, initialSortOrder = 0, onCancel, onSaved }: {
+export function AdminProjectEditor({ projectId, initialSortOrder = 0, onCancel, onSaved, onBusyChange }: {
   projectId: string | null
   initialSortOrder?: number
   onCancel: () => void
   onSaved: () => void
+  onBusyChange?: (busy: boolean) => void
 }) {
   const locale = useLocale()
   const isCreate = projectId === null
@@ -47,6 +49,83 @@ export function AdminProjectEditor({ projectId, initialSortOrder = 0, onCancel, 
   const [isLoading, setIsLoading] = useState(true)
   const [isSaving, setIsSaving] = useState(false)
   const [uploadingTarget, setUploadingTarget] = useState<string | null>(null)
+  const [isCleaning, setIsCleaning] = useState(false)
+  const operation = useRef(false)
+  const mounted = useRef(true)
+  const pendingUploads = useRef(new Set<string>())
+  const busy = isSaving || uploadingTarget !== null || isCleaning
+
+  useEffect(() => { onBusyChange?.(busy) }, [busy, onBusyChange])
+
+  async function discardUploads(urls: string[], keepalive = false) {
+    if (urls.length === 0) return
+    for (let offset = 0; offset < urls.length; offset += 51) {
+      const batch = urls.slice(offset, offset + 51)
+      const response = await fetch(`${apiBase}/admin/uploads/discard`, {
+        method: 'POST', credentials: 'include', keepalive,
+        headers: { 'Content-Type': 'application/json', 'X-CIMACH-CSRF': '1' },
+        body: JSON.stringify({ urls: batch }),
+      })
+      if (!response.ok) throw new Error('upload_cleanup_failed')
+      batch.forEach((url) => pendingUploads.current.delete(url))
+    }
+  }
+
+  useEffect(() => {
+    mounted.current = true
+    const warnBeforeLeaving = (event: BeforeUnloadEvent) => {
+      if (!operation.current && pendingUploads.current.size === 0) return
+      event.preventDefault()
+      event.returnValue = ''
+    }
+    window.addEventListener('beforeunload', warnBeforeLeaving)
+    return () => {
+      mounted.current = false
+      window.removeEventListener('beforeunload', warnBeforeLeaving)
+      onBusyChange?.(false)
+      // Best effort only; server-side expiry handles closed tabs and lost connections.
+      void discardUploads([...pendingUploads.current], true).catch(() => {})
+    }
+  }, [onBusyChange])
+
+  useEffect(() => {
+    if (!project || operation.current) return
+    const imageKey = (value: string) => {
+      try {
+        const url = new URL(value, window.location.origin)
+        return url.origin === window.location.origin && url.pathname.startsWith('/api/uploads/')
+          ? decodeURIComponent(url.pathname)
+          : value
+      } catch { return value }
+    }
+    const used = new Set([project.mainImageUrl, ...project.gallery.map((image) => image.src)].map(imageKey))
+    const unused = [...pendingUploads.current].filter((url) => !used.has(imageKey(url)))
+    if (!unused.length) return
+    operation.current = true
+    setIsCleaning(true)
+    void discardUploads(unused).catch(() => {
+      setError(locale === 'pl' ? 'Nie udało się usunąć nieużywanego uploadu. Ponowimy sprzątanie przy anulowaniu lub zapisie.' : 'Could not remove the unused upload. Cleanup will retry when cancelling or saving.')
+    }).finally(() => {
+      operation.current = false
+      if (mounted.current) setIsCleaning(false)
+    })
+  }, [project, locale])
+
+  async function cancel() {
+    if (operation.current) return
+    operation.current = true
+    setIsCleaning(true)
+    setError('')
+    try {
+      await discardUploads([...pendingUploads.current])
+      onCancel()
+    } catch {
+      setError(locale === 'pl' ? 'Nie udało się posprzątać uploadów. Spróbuj anulować ponownie.' : 'Could not clean up uploads. Please try cancelling again.')
+    } finally {
+      operation.current = false
+      if (mounted.current) setIsCleaning(false)
+    }
+  }
   const copy = locale === 'pl'
     ? {
         title: 'Edytuj projekt', createTitle: 'Nowy projekt', loading: 'Wczytuję projekt…', loadError: 'Nie udało się wczytać projektu.',
@@ -130,7 +209,8 @@ export function AdminProjectEditor({ projectId, initialSortOrder = 0, onCancel, 
   }
 
   async function uploadImage(file: File, target: string, onUploaded: (url: string) => void) {
-    if (uploadingTarget) return
+    if (operation.current) return
+    operation.current = true
     setUploadingTarget(target)
     setError('')
     const form = new FormData()
@@ -145,17 +225,24 @@ export function AdminProjectEditor({ projectId, initialSortOrder = 0, onCancel, 
       }
       if (!response.ok) throw new Error('upload_error')
       const result = await response.json() as { url: string }
+      pendingUploads.current.add(result.url)
+      if (!mounted.current) {
+        await discardUploads([result.url], true)
+        return
+      }
       onUploaded(result.url)
     } catch {
       setError(locale === 'pl' ? 'Nie udało się przesłać obrazu. Użyj JPG, PNG lub WebP do 10 MB.' : 'Could not upload image. Use JPG, PNG or WebP up to 10 MB.')
     } finally {
+      operation.current = false
       setUploadingTarget(null)
     }
   }
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    if (!project || isSaving) return
+    if (!project || operation.current) return
+    operation.current = true
     setIsSaving(true)
     setError('')
     const payload = {
@@ -189,25 +276,37 @@ export function AdminProjectEditor({ projectId, initialSortOrder = 0, onCancel, 
         return
       }
       if (response.status === 409) throw new Error('slug_conflict')
-      if (response.status === 422) throw new Error('invalid_project')
+      if (response.status === 422) {
+        const result = await response.json() as { error?: string }
+        throw new Error(result.error === 'invalid_upload' ? 'invalid_upload' : 'invalid_project')
+      }
       if (!response.ok) throw new Error('save_error')
+      // A referenced image is protected by the server, including after a lost save response.
+      await discardUploads([...pendingUploads.current]).catch(() => {})
+      pendingUploads.current.clear()
       onSaved()
     } catch (cause) {
       const key = cause instanceof Error ? cause.message : ''
-      setError(key === 'slug_conflict' ? copy.slugConflict : key === 'invalid_project' ? copy.invalid : copy.saveError)
+      setError(key === 'invalid_upload'
+        ? locale === 'pl' ? 'Upload wygasł lub zdjęcie jest niedostępne. Prześlij je ponownie.' : 'The upload expired or the image is unavailable. Please upload it again.'
+        : key === 'slug_conflict' ? copy.slugConflict : key === 'invalid_project' ? copy.invalid : copy.saveError)
       setIsSaving(false)
+    } finally {
+      operation.current = false
+      if (mounted.current) setIsSaving(false)
     }
   }
 
-  if (isLoading) return <p className="admin-page__message" role="status">{copy.loading}</p>
+  if (isLoading) return <p className="admin-page__message" role="status"><LoadingSpinner /> {copy.loading}</p>
   if (error && !project) return <p className="admin-page__message" role="alert">{error}</p>
   if (!project) return null
 
   return (
-    <form className="admin-project-editor" onSubmit={submit} onInvalidCapture={(event) => { event.preventDefault(); setError(copy.invalid) }}>
+    <form className="admin-project-editor" aria-busy={busy} onSubmit={submit} onInvalidCapture={(event) => { event.preventDefault(); setError(copy.invalid) }}>
+      <fieldset className="admin-project-editor__controls" aria-label={isCreate ? copy.createTitle : copy.title} disabled={busy}>
       <div className="admin-project-editor__heading">
         <h2 className="eyebrow">{isCreate ? copy.createTitle : copy.title}</h2>
-        <button className="admin-project-editor__button admin-project-editor__button--quiet" type="button" onClick={onCancel}>{copy.cancel}</button>
+        <button className="admin-project-editor__button admin-project-editor__button--quiet" type="button" onClick={() => void cancel()}>{isCleaning && <LoadingSpinner />} {copy.cancel}</button>
       </div>
       {error && <p className="admin-project-editor__error" role="alert">{error}</p>}
       <div className="admin-project-editor__grid admin-project-editor__grid--meta">
@@ -224,7 +323,7 @@ export function AdminProjectEditor({ projectId, initialSortOrder = 0, onCancel, 
         </label>
         {!isCreate && <label><span>{copy.order}</span><input type="number" min="0" max="1000000" required value={project.sortOrder} onChange={(event) => updateProject('sortOrder', Number(event.target.value))} /></label>}
       </div>
-      {uploadingTarget === 'main' && <p className="admin-project-editor__hint" role="status">{locale === 'pl' ? 'Przesyłanie i optymalizacja obrazu…' : 'Uploading and optimizing image…'}</p>}
+      {uploadingTarget === 'main' && <p className="admin-project-editor__hint" role="status"><LoadingSpinner /> {locale === 'pl' ? 'Przesyłanie i optymalizacja obrazu…' : 'Uploading and optimizing image…'}</p>}
       <div className="admin-project-editor__translations">
         {(['pl', 'en'] as const).map((language) => (
           <fieldset key={language}>
@@ -250,13 +349,15 @@ export function AdminProjectEditor({ projectId, initialSortOrder = 0, onCancel, 
             <button className="admin-project-editor__button admin-project-editor__button--quiet" type="button" onClick={() => updateProject('gallery', project.gallery.filter((_, imageIndex) => imageIndex !== index))}>{copy.removeImage}</button>
           </fieldset>
         ))}
-        {uploadingTarget?.startsWith('gallery-') && <p className="admin-project-editor__hint" role="status">{locale === 'pl' ? 'Przesyłanie i optymalizacja obrazu…' : 'Uploading and optimizing image…'}</p>}
+        {uploadingTarget?.startsWith('gallery-') && <p className="admin-project-editor__hint" role="status"><LoadingSpinner /> {locale === 'pl' ? 'Przesyłanie i optymalizacja obrazu…' : 'Uploading and optimizing image…'}</p>}
         <button className="admin-project-editor__button admin-project-editor__button--quiet" type="button" onClick={() => updateProject('gallery', [...project.gallery, { src: '', altPl: '', altEn: '' }])}>{copy.addImage}</button>
       </section>
       <div className="admin-project-editor__actions">
-        <button className="admin-page__logout" type="submit" disabled={isSaving || uploadingTarget !== null}>{isSaving ? isCreate ? copy.creating : copy.saving : isCreate ? copy.create : copy.save}</button>
-        <button className="admin-project-editor__button admin-project-editor__button--quiet" type="button" onClick={onCancel}>{copy.cancel}</button>
+        <button className="admin-page__logout" type="submit" disabled={busy}>{isSaving && <LoadingSpinner />} {isSaving ? isCreate ? copy.creating : copy.saving : isCreate ? copy.create : copy.save}</button>
+        <button className="admin-project-editor__button admin-project-editor__button--quiet" type="button" onClick={() => void cancel()}>{isCleaning && <LoadingSpinner />} {copy.cancel}</button>
       </div>
+      {isCleaning && <p className="admin-project-editor__hint" role="status"><LoadingSpinner /> {locale === 'pl' ? 'Usuwanie nieużywanych uploadów…' : 'Cleaning up unused uploads…'}</p>}
+      </fieldset>
     </form>
   )
 }

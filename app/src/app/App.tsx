@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { LocaleContext, type Locale } from '../i18n/LocaleContext'
 import { HomePage } from '../pages/home/HomePage'
 import { ProjectPage } from '../pages/projects/ProjectPage'
+import { ProjectsPage } from '../pages/projects/ProjectsPage'
 import { LoginPage } from '../pages/auth/LoginPage'
 import { AdminPage } from '../pages/auth/AdminPage'
 import { SiteLayout } from '../layouts/SiteLayout'
@@ -9,6 +10,7 @@ import { AuthLayout } from '../layouts/AuthLayout'
 import { getSeo, type SeoPage } from '../seo'
 import {
   loadPublicProjectCatalog,
+  loadAllPublicProjectCatalog,
   loadPublicProjectPage,
   type PrerenderData,
   type PublicProjectCatalogData,
@@ -63,21 +65,21 @@ function applySeoMetadata(pageSeo: ReturnType<typeof getSeo>, robots: string) {
 }
 
 function routeFromPath(pathname: string): AppRoute | null {
-  const match = pathname.match(/^\/(pl|en)(?:\/projects\/([^/]+)|\/login|\/admin)?\/?$/)
+  const match = pathname.match(/^\/(pl|en)(?:\/projects(?:\/([^/]+))?|\/login|\/admin)?\/?$/)
   if (!match) return null
   const projectSlug = match[2]
   return {
     locale: match[1] as Locale,
     page: projectSlug
       ? 'project'
-      : pathname.includes('/login') ? 'login'
+      : pathname.includes('/projects') ? 'projects' : pathname.includes('/login') ? 'login'
         : pathname.includes('/admin') ? 'admin' : 'home',
     ...(projectSlug ? { projectSlug } : {}),
   }
 }
 
-function matchesCatalog(data: PrerenderData | undefined, locale: Locale): data is PublicProjectCatalogData {
-  return data?.kind === 'catalog' && data.locale === locale
+function matchesCatalog(data: PrerenderData | undefined, locale: Locale, page: SeoPage): data is PublicProjectCatalogData {
+  return data?.kind === 'catalog' && data.locale === locale && (data.scope ?? 'featured') === (page === 'projects' ? 'all' : 'featured')
 }
 
 function matchesProject(data: PrerenderData | undefined, locale: Locale, slug: string | undefined): data is PublicProjectPageData {
@@ -97,7 +99,7 @@ export default function App({
   const [requestState, setRequestState] = useState<RequestState | undefined>()
   const requestKey = route.page === 'project'
     ? `${route.locale}:project:${route.projectSlug}`
-    : `${route.locale}:catalog`
+    : `${route.locale}:catalog:${route.page}`
 
   useEffect(() => {
     const syncRoute = () => {
@@ -119,22 +121,23 @@ export default function App({
   const currentProjectPage = route.page === 'project' && matchesProject(pageData, route.locale, route.projectSlug)
     ? pageData
     : undefined
-  const currentCatalog = route.page === 'home' && matchesCatalog(pageData, route.locale)
+  const currentCatalog = (route.page === 'home' || route.page === 'projects') && matchesCatalog(pageData, route.locale, route.page)
     ? pageData
     : undefined
   const currentRequest = requestState?.key === requestKey ? requestState.status : undefined
 
   useEffect(() => {
-    if (route.page === 'home' && matchesCatalog(pageData, route.locale)) return
+    if ((route.page === 'home' || route.page === 'projects') && matchesCatalog(pageData, route.locale, route.page)) return
     if (route.page === 'project' && matchesProject(pageData, route.locale, route.projectSlug)) return
-    if (route.page !== 'home' && route.page !== 'project') return
+    if (route.page !== 'home' && route.page !== 'projects' && route.page !== 'project') return
 
     const controller = new AbortController()
     setRequestState({ key: requestKey, status: 'loading' })
     const apiBase = import.meta.env.VITE_API_BASE_URL || '/api'
     const request = route.page === 'home'
       ? loadPublicProjectCatalog(route.locale, apiBase, fetch, controller.signal)
-      : loadPublicProjectPage(route.locale, route.projectSlug!, apiBase, fetch, controller.signal)
+      : route.page === 'projects' ? loadAllPublicProjectCatalog(route.locale, apiBase, fetch, controller.signal)
+        : loadPublicProjectPage(route.locale, route.projectSlug!, apiBase, fetch, controller.signal)
     request.then((data) => {
       if (controller.signal.aborted) return
       if (data === null) {
@@ -193,7 +196,9 @@ export default function App({
           >
             {route.page === 'project'
               ? <ProjectPage project={currentProjectPage?.project ?? null} loading={projectLoading} error={projectError} notFound={projectNotFound} />
-              : <HomePage projects={currentCatalog?.projects ?? []} loading={route.page === 'home' && !currentCatalog && currentRequest !== 'error'} error={route.page === 'home' && currentRequest === 'error'} />}
+              : route.page === 'projects'
+                ? <ProjectsPage projects={currentCatalog?.projects ?? []} loading={!currentCatalog && currentRequest !== 'error'} error={currentRequest === 'error'} />
+                : <HomePage projects={currentCatalog?.projects ?? []} loading={route.page === 'home' && !currentCatalog && currentRequest !== 'error'} error={route.page === 'home' && currentRequest === 'error'} />}
           </SiteLayout>}
     </LocaleContext.Provider>
   )

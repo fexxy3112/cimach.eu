@@ -6,6 +6,17 @@ import ts from 'typescript'
 
 let getSeo
 
+test('full project catalogs have localized canonical URLs and language alternates', () => {
+  for (const locale of ['pl', 'en']) {
+    const seo = getSeo(locale, 'projects')
+    assert.equal(seo.canonical, `https://cimach.eu/${locale}/projects/`)
+    assert.equal(seo.alternatePl, 'https://cimach.eu/pl/projects/')
+    assert.equal(seo.alternateEn, 'https://cimach.eu/en/projects/')
+    assert.ok(seo.title.length > 0)
+    assert.ok(seo.description.length > 0)
+  }
+})
+
 before(async () => {
   const source = await readFile(resolve(process.cwd(), 'src/seo.ts'), 'utf8')
   const { outputText } = ts.transpileModule(source, {

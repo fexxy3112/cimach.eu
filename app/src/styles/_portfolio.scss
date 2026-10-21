@@ -300,6 +300,12 @@ html[data-theme="light"] .theme-toggle .sun {
 .work-item:last-child {
   border-bottom: 1px solid var(--line)
 }
+.work-item--all .work-name {
+  grid-column: 2 / -2;
+}
+.work-item--all .work-arrow {
+  grid-column: -2;
+}
 .work-item:hover {
   padding-left: 12px;
   padding-right: 12px;

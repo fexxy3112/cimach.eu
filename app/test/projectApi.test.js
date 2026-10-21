@@ -33,6 +33,7 @@ test('loads the published project catalog by locale', async () => {
   const catalog = await loadPublicProjectCatalog('pl', 'http://api.example/api/', fetcher)
   assert.deepEqual(requests, ['http://api.example/api/projects?locale=pl'])
   assert.equal(catalog.kind, 'catalog')
+  assert.equal(catalog.scope, 'featured')
   assert.equal(catalog.projects[0].caseStudySlug, 'new-project-17')
 })
 
@@ -44,6 +45,7 @@ test('loads all published projects separately from featured homepage catalog', a
   }
   const catalog = await loadAllPublicProjectCatalog('en', '/api', fetcher)
   assert.deepEqual(requests, ['/api/projects?locale=en&scope=all'])
+  assert.equal(catalog.scope, 'all')
   assert.equal(catalog.projects[0].caseStudySlug, 'new-project-17')
 })
 

@@ -1,9 +1,7 @@
 import { randomBytes } from 'node:crypto'
-import { mkdir, writeFile } from 'node:fs/promises'
-import { join } from 'node:path'
 import sharp from 'sharp'
 
-export function createImageUploadController(uploadDir) {
+export function createImageUploadController(uploads) {
   return {
     async upload(req, res, next) {
       try {
@@ -25,8 +23,7 @@ export function createImageUploadController(uploadDir) {
           return res.status(422).json({ error: 'invalid_image' })
         }
         const filename = `${randomBytes(20).toString('hex')}.webp`
-        await mkdir(uploadDir, { recursive: true })
-        await writeFile(join(uploadDir, filename), optimized, { flag: 'wx', mode: 0o644 })
+        await uploads.store(filename, optimized, req.auth.userId)
 
         return res.status(201).json({
           url: `/api/uploads/${filename}`,
@@ -45,12 +42,22 @@ export function createImageUploadController(uploadDir) {
       if (!/^[a-f0-9]{40}\.webp$/.test(filename)) return res.status(404).json({ error: 'not_found' })
       res.type('image/webp')
       res.set('Cache-Control', 'public, max-age=31536000, immutable')
-      return res.sendFile(filename, { root: uploadDir }, (error) => {
+      return res.sendFile(filename, { root: uploads.directory }, (error) => {
         if (error && !res.headersSent) {
           if (error.statusCode === 404) return res.status(404).json({ error: 'not_found' })
           return next(error)
         }
       })
+    },
+
+    async discard(req, res, next) {
+      const urls = req.body?.urls
+      if (!Array.isArray(urls) || urls.length > 51 || urls.some((url) => typeof url !== 'string' || url.length > 2048)) {
+        return res.status(422).json({ error: 'invalid_uploads' })
+      }
+      try {
+        return res.json(await uploads.discard(urls, req.auth.userId))
+      } catch (error) { return next(error) }
     },
   }
 }

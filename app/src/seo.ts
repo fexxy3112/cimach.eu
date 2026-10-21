@@ -46,7 +46,7 @@ const adminSeo = {
   },
 } as const
 
-export type SeoPage = 'home' | 'project' | 'login' | 'admin'
+export type SeoPage = 'home' | 'projects' | 'project' | 'login' | 'admin'
 
 export function getSeo(
   locale: Locale,
@@ -55,6 +55,18 @@ export function getSeo(
   projectSlug?: string,
   projectLocales?: Locale[],
 ) {
+  if (page === 'projects') {
+    return {
+      title: locale === 'pl' ? 'Wszystkie projekty | CIMACH' : 'All projects | CIMACH',
+      description: locale === 'pl' ? 'Projekty Mateusza Cimachowskiego - strony internetowe i aplikacje webowe.' : 'Projects by Mateusz Cimachowski - websites and web applications.',
+      path: `/${locale}/projects/`,
+      ogLocale: seo[locale].ogLocale,
+      canonical: `https://cimach.eu/${locale}/projects/`,
+      alternatePl: 'https://cimach.eu/pl/projects/',
+      alternateEn: 'https://cimach.eu/en/projects/',
+      xDefault: 'https://cimach.eu/pl/projects/',
+    }
+  }
   if (page === 'project') {
     const slug = projectSlug || ''
     const path = `/${locale}/projects/${slug}/`

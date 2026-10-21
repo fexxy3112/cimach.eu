@@ -1,7 +1,7 @@
 import { createProjectModel } from '../database/models/project.model.js'
 import { FEATURED_PROJECT_LIMIT } from '../validators/project.validator.js'
 
-export function createProjectService(pool) {
+export function createProjectService(pool, uploads) {
   const projects = createProjectModel(pool)
   return {
     async listForAdmin() {
@@ -10,13 +10,16 @@ export function createProjectService(pool) {
     async findForAdmin(id) {
       return projects.findAdminById(id)
     },
-    async createForAdmin(project) {
-      return projects.createAdmin(project)
+    async createForAdmin(project, userId) {
+      return uploads.saveProject(project, userId, (normalized, connection) => projects.createAdmin(normalized, connection))
     },
-    async updateForAdmin(id, project) {
-      const updated = await projects.updateAdminById(id, project)
+    async updateForAdmin(id, project, userId) {
+      const updated = await uploads.saveProject(project, userId, (normalized, connection) => projects.updateAdminById(id, normalized, connection))
       if (!updated) return null
       return projects.findAdminById(id)
+    },
+    async updateStatusForAdmin(id, status) {
+      return projects.updateStatus(id, status)
     },
     async updateFeatured(projectIds) {
       await projects.updateFeatured(projectIds)

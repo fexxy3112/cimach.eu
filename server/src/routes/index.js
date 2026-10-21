@@ -6,7 +6,8 @@ import { createProjectController } from '../controllers/project.controller.js'
 import { createImageUploadController } from '../controllers/image-upload.controller.js'
 import { receiveImageUpload } from '../middleware/image-upload.middleware.js'
 import { createProjectService } from '../services/project.service.js'
-import { validateFeaturedSelection, validateProjectCreate, validateProjectId, validateProjectUpdate } from '../validators/project.validator.js'
+import { createUploadService } from '../services/upload.service.js'
+import { validateFeaturedSelection, validateProjectCreate, validateProjectId, validateProjectStatus, validateProjectUpdate } from '../validators/project.validator.js'
 import { createAuthRouter } from './auth.routes.js'
 import { createProjectRouter } from './project.routes.js'
 
@@ -14,8 +15,9 @@ export function createApiRouter({ authService, config, pool }) {
   const router = Router()
   const authenticate = createAuthenticate(authService, config)
   const controller = createAuthController({ authService, config })
-  const projectController = createProjectController(createProjectService(pool))
-  const imageUploadController = createImageUploadController(config.uploadDir)
+  const uploads = createUploadService({ pool, config })
+  const projectController = createProjectController(createProjectService(pool, uploads))
+  const imageUploadController = createImageUploadController(uploads)
 
   router.get('/healthz', (_req, res) => res.status(200).json({ status: 'ok' }))
   router.use('/auth', createAuthRouter({ controller, loginRateLimiter: createLoginRateLimiter(), authenticate }))
@@ -26,9 +28,11 @@ export function createApiRouter({ authService, config, pool }) {
   })
   router.get('/admin/projects', authenticate, requireRole('admin'), projectController.adminList)
   router.post('/admin/uploads', authenticate, requireRole('admin'), receiveImageUpload, imageUploadController.upload)
+  router.post('/admin/uploads/discard', authenticate, requireRole('admin'), imageUploadController.discard)
   router.post('/admin/projects', authenticate, requireRole('admin'), validateProjectCreate, projectController.adminCreate)
   router.put('/admin/projects/featured', authenticate, requireRole('admin'), validateFeaturedSelection, projectController.adminUpdateFeatured)
   router.get('/admin/projects/:id', authenticate, requireRole('admin'), validateProjectId, projectController.adminDetail)
+  router.put('/admin/projects/:id/status', authenticate, requireRole('admin'), validateProjectId, validateProjectStatus, projectController.adminUpdateStatus)
   router.put('/admin/projects/:id', authenticate, requireRole('admin'), validateProjectId, validateProjectUpdate, projectController.adminUpdate)
   return router
 }

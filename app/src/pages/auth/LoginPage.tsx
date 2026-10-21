@@ -1,5 +1,6 @@
-import { useEffect, useState, type FormEvent } from 'react'
+import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { useLocale } from '../../i18n/LocaleContext'
+import { LoadingSpinner } from '../../components/LoadingSpinner'
 import './LoginPage.scss'
 
 const apiBase = import.meta.env.VITE_API_BASE_URL || '/api'
@@ -9,6 +10,7 @@ export function LoginPage() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const submitting = useRef(false)
   const [message, setMessage] = useState('')
   const copy = locale === 'pl'
     ? {
@@ -58,7 +60,8 @@ export function LoginPage() {
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    if (isSubmitting) return
+    if (submitting.current) return
+    submitting.current = true
     setIsSubmitting(true)
     setMessage('')
 
@@ -79,6 +82,7 @@ export function LoginPage() {
     } catch {
       setMessage(copy.network)
     } finally {
+      submitting.current = false
       setIsSubmitting(false)
     }
   }
@@ -90,7 +94,7 @@ export function LoginPage() {
         <h1 id="login-title">{copy.title}<span>.</span></h1>
         <p className="login-page__intro">{copy.intro}</p>
 
-        <form className="login-page__form" onSubmit={submit}>
+        <form className="login-page__form" onSubmit={submit} aria-busy={isSubmitting}>
           <label className="login-page__field">
             <span>{copy.email}</span>
             <input
@@ -100,6 +104,7 @@ export function LoginPage() {
               required
               maxLength={254}
               value={email}
+              disabled={isSubmitting}
               onChange={(event) => setEmail(event.target.value)}
             />
           </label>
@@ -112,11 +117,12 @@ export function LoginPage() {
               required
               maxLength={72}
               value={password}
+              disabled={isSubmitting}
               onChange={(event) => setPassword(event.target.value)}
             />
           </label>
           <button className="login-page__submit" type="submit" disabled={isSubmitting}>
-            {isSubmitting ? copy.checking : copy.submit}
+            {isSubmitting && <LoadingSpinner />} {isSubmitting ? copy.checking : copy.submit}
           </button>
           <p className="login-page__notice" role="status" aria-live="polite">{message}</p>
         </form>

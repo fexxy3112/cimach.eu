@@ -29,6 +29,7 @@ export function generateSitemap(catalogs, getSeo) {
 
   for (const locale of ['pl', 'en']) {
     entries.push(renderUrl(getSeo(locale, 'home')))
+    entries.push(renderUrl(getSeo(locale, 'projects')))
   }
 
   for (const locale of ['pl', 'en']) {

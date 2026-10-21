@@ -59,6 +59,20 @@ function duplicateSlugError(error) {
 
 export function createProjectModel(pool) {
   return {
+    async updateStatus(id, status) {
+      const [result] = await pool.execute(
+        `UPDATE projects SET status = ?,
+           is_featured = IF(? = 'draft', 0, is_featured),
+           featured_order = IF(? = 'draft', NULL, featured_order),
+           published_at = IF(? = 'published', COALESCE(published_at, UTC_TIMESTAMP(3)), published_at)
+         WHERE id = ?`,
+        [status, status, status, status, id],
+      )
+      if (result.affectedRows > 0) return true
+      const [rows] = await pool.execute('SELECT id FROM projects WHERE id = ? LIMIT 1', [id])
+      return rows.length > 0
+    },
+
     async findAllForAdmin() {
       const [rows] = await pool.execute(
         `SELECT p.id, p.slug, p.status, p.sort_order AS sortOrder,
@@ -133,8 +147,8 @@ export function createProjectModel(pool) {
       }
     },
 
-    async createAdmin(project) {
-      const connection = await pool.getConnection()
+    async createAdmin(project, existingConnection) {
+      const connection = existingConnection || await pool.getConnection()
       try {
         await connection.beginTransaction()
         const [[numberRow]] = await connection.execute(
@@ -183,12 +197,12 @@ export function createProjectModel(pool) {
         await connection.rollback()
         throw duplicateSlugError(error)
       } finally {
-        connection.release()
+        if (!existingConnection) connection.release()
       }
     },
 
-    async updateAdminById(id, project) {
-      const connection = await pool.getConnection()
+    async updateAdminById(id, project, existingConnection) {
+      const connection = existingConnection || await pool.getConnection()
       try {
         await connection.beginTransaction()
         const [existingRows] = await connection.execute('SELECT id FROM projects WHERE id = ? FOR UPDATE', [id])
@@ -251,7 +265,7 @@ export function createProjectModel(pool) {
         await connection.rollback()
         throw duplicateSlugError(error)
       } finally {
-        connection.release()
+        if (!existingConnection) connection.release()
       }
     },
 

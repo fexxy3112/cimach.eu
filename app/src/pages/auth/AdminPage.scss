@@ -79,6 +79,10 @@
   cursor: wait
 }
 
+.admin-page__logout .loading-spinner {
+  margin-right: 7px
+}
+
 .admin-projects {
   margin-top: 54px
 }
@@ -172,6 +176,19 @@
   background: var(--surface);
   color: var(--ink);
   font: 10px var(--font-mono)
+}
+
+.admin-projects__status-feedback {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: 8px;
+  color: var(--muted);
+  font-size: 10px
+}
+
+.admin-projects__status-feedback .loading-spinner {
+  font-size: 11px
 }
 
 .admin-projects__featured-list {

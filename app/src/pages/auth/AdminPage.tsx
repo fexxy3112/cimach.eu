@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type PointerEvent } from 'react'
 import { useLocale } from '../../i18n/LocaleContext'
 import { AdminProjectEditor } from './AdminProjectEditor'
+import { LoadingSpinner } from '../../components/LoadingSpinner'
 import './AdminPage.scss'
 
 const apiBase = import.meta.env.VITE_API_BASE_URL || '/api'
@@ -28,6 +29,10 @@ export function AdminPage() {
   const [savedFeaturedIds, setSavedFeaturedIds] = useState<string[]>([])
   const [draggedProjectId, setDraggedProjectId] = useState<string | null>(null)
   const pointerDraggedProjectId = useRef<string | null>(null)
+  const logoutLock = useRef(false)
+  const featuredLock = useRef(false)
+  const statusLock = useRef(false)
+  const refreshLock = useRef(false)
   const [featuredLimit, setFeaturedLimit] = useState(3)
   const [isSavingFeatured, setIsSavingFeatured] = useState(false)
   const [editingProjectId, setEditingProjectId] = useState<string | null>(null)
@@ -36,7 +41,9 @@ export function AdminPage() {
   const [statusError, setStatusError] = useState('')
   const [isCreatingProject, setIsCreatingProject] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
+  const [isRefreshing, setIsRefreshing] = useState(false)
   const [isLoggingOut, setIsLoggingOut] = useState(false)
+  const [editorBusy, setEditorBusy] = useState(false)
   const copy = locale === 'pl'
     ? {
         eyebrow: 'STREFA ADMINISTRACYJNA', title: 'Panel', intro: 'Sesja administratora jest aktywna.',
@@ -148,7 +155,8 @@ export function AdminPage() {
   }, [draggedProjectId, projects])
 
   async function logout() {
-    if (isLoggingOut) return
+    if (logoutLock.current || featuredLock.current || statusLock.current || refreshLock.current || editorBusy) return
+    logoutLock.current = true
     setIsLoggingOut(true)
     setMessage('')
     try {
@@ -161,12 +169,13 @@ export function AdminPage() {
       window.location.replace(`/${locale}/login/`)
     } catch {
       setMessage(copy.logoutError)
+      logoutLock.current = false
       setIsLoggingOut(false)
     }
   }
 
   function updateFeatured(projectId: string, selected: boolean) {
-    if (!projects) return
+    if (!projects || isSavingFeatured || savingStatusProjectId !== null || isRefreshing) return
     const ordered = projects.filter((project) => project.isFeatured).sort((a, b) => (a.featuredOrder ?? 0) - (b.featuredOrder ?? 0))
     const current = projects.find((project) => project.id === projectId)
     if (!current || current.status !== 'published') return
@@ -203,6 +212,7 @@ export function AdminPage() {
   }
 
   function handlePointerDown(event: PointerEvent<HTMLButtonElement>, projectId: string) {
+    if (isSavingFeatured || savingStatusProjectId !== null || isRefreshing || isLoggingOut) return
     event.preventDefault()
     pointerDraggedProjectId.current = projectId
     setDraggedProjectId(projectId)
@@ -214,6 +224,7 @@ export function AdminPage() {
   }
 
   function openProjectEditor(projectId: string) {
+    if (isSavingFeatured || savingStatusProjectId !== null || isRefreshing || isLoggingOut) return
     if (hasFeaturedChanges && !window.confirm(copy.discardUnsaved)) return
     if (hasFeaturedChanges && projects) {
       setProjects(projects.map((project) => {
@@ -227,6 +238,7 @@ export function AdminPage() {
   }
 
   function openProjectCreator() {
+    if (isSavingFeatured || savingStatusProjectId !== null || isRefreshing || isLoggingOut) return
     if (hasFeaturedChanges && !window.confirm(copy.discardUnsaved)) return
     if (hasFeaturedChanges && projects) {
       setProjects(projects.map((project) => {
@@ -240,7 +252,8 @@ export function AdminPage() {
   }
 
   async function saveFeatured() {
-    if (!projects || isSavingFeatured) return
+    if (!projects || featuredLock.current || statusLock.current || refreshLock.current || logoutLock.current) return
+    featuredLock.current = true
     setIsSavingFeatured(true)
     setFeaturedError('')
     setFeaturedSaved(false)
@@ -268,11 +281,15 @@ export function AdminPage() {
     } catch {
       setFeaturedError(copy.featuredError)
     } finally {
+      featuredLock.current = false
       setIsSavingFeatured(false)
     }
   }
 
   async function refreshProjects() {
+    if (refreshLock.current || featuredLock.current || statusLock.current || logoutLock.current) return
+    refreshLock.current = true
+    setIsRefreshing(true)
     setEditingProjectId(null)
     setIsCreatingProject(false)
     setProjectsError('')
@@ -289,29 +306,23 @@ export function AdminPage() {
       setFeaturedLimit(result.featuredLimit)
     } catch {
       setProjectsError(copy.projectsUnavailable)
+    } finally {
+      refreshLock.current = false
+      setIsRefreshing(false)
     }
   }
 
   async function updateProjectStatus(project: AdminProject, status: AdminProject['status']) {
-    if (savingStatusProjectId) return
+    if (statusLock.current || featuredLock.current || refreshLock.current || logoutLock.current || status === project.status) return
+    statusLock.current = true
     setSavingStatusProjectId(project.id)
     setStatusError('')
     try {
-      const detailResponse = await fetch(`${apiBase}/admin/projects/${encodeURIComponent(project.id)}`, {
-        credentials: 'include',
-        cache: 'no-store',
-      })
-      if (detailResponse.status === 401 || detailResponse.status === 403) {
-        window.location.replace(`/${locale}/login/?expired=1`)
-        return
-      }
-      if (!detailResponse.ok) throw new Error('project_load_failed')
-      const detail = await detailResponse.json() as { project: Record<string, unknown> }
-      const response = await fetch(`${apiBase}/admin/projects/${encodeURIComponent(project.id)}`, {
+      const response = await fetch(`${apiBase}/admin/projects/${encodeURIComponent(project.id)}/status`, {
         method: 'PUT',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json', 'X-CIMACH-CSRF': '1' },
-        body: JSON.stringify({ ...detail.project, status }),
+        body: JSON.stringify({ status }),
       })
       if (response.status === 401 || response.status === 403) {
         window.location.replace(`/${locale}/login/?expired=1`)
@@ -326,6 +337,7 @@ export function AdminPage() {
     } catch {
       setStatusError(copy.statusError)
     } finally {
+      statusLock.current = false
       setSavingStatusProjectId(null)
     }
   }
@@ -336,14 +348,14 @@ export function AdminPage() {
         <p className="eyebrow admin-page__eyebrow">{copy.eyebrow}</p>
         <h1 id="admin-title">{copy.title}<span>.</span></h1>
         {isLoading
-          ? <p className="admin-page__message" role="status">{copy.loading}</p>
+          ? <p className="admin-page__message" role="status"><LoadingSpinner /> {copy.loading}</p>
           : user
             ? <>
                 <p className="admin-page__intro">{copy.intro}</p>
                 <div className="admin-page__identity">
                   <span>{user.email}</span>
-                  <button className="admin-page__logout admin-page__logout--identity" type="button" onClick={logout} disabled={isLoggingOut}>
-                    {isLoggingOut ? copy.loading : copy.logout}
+                  <button className="admin-page__logout admin-page__logout--identity" type="button" onClick={logout} disabled={isLoggingOut || isSavingFeatured || savingStatusProjectId !== null || isRefreshing || editorBusy}>
+                    {isLoggingOut ? <><LoadingSpinner /> {copy.loading}</> : copy.logout}
                   </button>
                 </div>
                 {isCreatingProject || editingProjectId
@@ -352,11 +364,12 @@ export function AdminPage() {
                       initialSortOrder={projects ? Math.max(-1, ...projects.map((project) => project.sortOrder)) + 1 : 0}
                       onCancel={() => { setIsCreatingProject(false); setEditingProjectId(null) }}
                       onSaved={refreshProjects}
+                      onBusyChange={setEditorBusy}
                     />
                   : <section className="admin-projects" aria-label={copy.projects}>
                   {projectsError && <p className="admin-page__message" role="alert">{projectsError}</p>}
                   <div className="admin-projects__topbar">
-                    <button className="admin-page__logout" type="button" onClick={openProjectCreator}>{copy.newProject}</button>
+                    <button className="admin-page__logout" type="button" onClick={openProjectCreator} disabled={isSavingFeatured || savingStatusProjectId !== null || isRefreshing || isLoggingOut}>{isRefreshing ? <><LoadingSpinner /> {copy.loading}</> : copy.newProject}</button>
                   </div>
                   <section className="admin-projects__group" aria-labelledby="admin-featured-title">
                     <h2 id="admin-featured-title" className="eyebrow">{copy.featuredProjects}</h2>
@@ -373,6 +386,7 @@ export function AdminPage() {
                                 type="button"
                                 className="admin-projects__drag-handle"
                                 onPointerDown={(event) => handlePointerDown(event, project.id)}
+                                disabled={isSavingFeatured || savingStatusProjectId !== null || isRefreshing || isLoggingOut}
                                 onClick={(event) => event.preventDefault()}
                                 aria-label={copy.drag}
                                 title={copy.drag}
@@ -383,7 +397,7 @@ export function AdminPage() {
                                 <span>{project.titleEn || project.slug}</span>
                               </div>
                               <code>{project.slug || '—'}</code>
-                              <button className="admin-projects__text-action" type="button" onClick={() => updateFeatured(project.id, false)}>{copy.removeFeatured}</button>
+                              <button className="admin-projects__text-action" type="button" onClick={() => updateFeatured(project.id, false)} disabled={isSavingFeatured || savingStatusProjectId !== null || isRefreshing || isLoggingOut}>{copy.removeFeatured}</button>
                             </article>
                           ))}
                         </div>
@@ -391,8 +405,8 @@ export function AdminPage() {
                     <div className="admin-projects__save">
                       {featuredError && <p className="admin-page__message" role="alert">{featuredError}</p>}
                       {showUnsavedFeaturedChanges && <p className="admin-projects__unsaved" role="status">{copy.unsaved}</p>}
-                      <button className="admin-page__logout" type="button" onClick={saveFeatured} disabled={isSavingFeatured || draggedProjectId !== null}>
-                        {isSavingFeatured ? copy.loading : copy.saveFeatured}
+                      <button className="admin-page__logout" type="button" onClick={saveFeatured} disabled={isSavingFeatured || savingStatusProjectId !== null || isRefreshing || isLoggingOut || draggedProjectId !== null}>
+                        {isSavingFeatured ? <><LoadingSpinner /> {copy.loading}</> : copy.saveFeatured}
                       </button>
                       {featuredSaved && <span className="admin-projects__saved" aria-live="polite">{copy.featuredSaved}</span>}
                     </div>
@@ -420,27 +434,29 @@ export function AdminPage() {
                                 <td data-label={copy.slug}><code>{project.slug || '—'}</code></td>
                                 <td data-label={copy.status}>
                                   {editingStatusProjectId === project.id
-                                    ? <select
+                                    ? <><select
                                         className="admin-projects__status-select"
                                         aria-label={copy.status}
                                         autoFocus
-                                        disabled={savingStatusProjectId !== null}
+                                        disabled={savingStatusProjectId !== null || isSavingFeatured || isRefreshing || isLoggingOut}
                                         value={project.status}
                                         onBlur={() => { if (!savingStatusProjectId) setEditingStatusProjectId(null) }}
+                                        onKeyDown={(event) => { if (event.key === 'Escape' && !savingStatusProjectId) setEditingStatusProjectId(null) }}
                                         onChange={(event) => void updateProjectStatus(project, event.target.value as AdminProject['status'])}
                                       >
                                         <option value="draft">{copy.draft}</option>
                                         <option value="published">{copy.published}</option>
-                                      </select>
+                                      </select>{savingStatusProjectId === project.id && <span className="admin-projects__status-feedback" role="status"><LoadingSpinner /> {copy.loading}</span>}</>
                                     : <span
                                         className={`admin-projects__status admin-projects__status--${project.status}`}
                                         role="button"
                                         tabIndex={0}
                                         title={copy.editStatus}
-                                        onDoubleClick={() => { setStatusError(''); setEditingStatusProjectId(project.id) }}
+                                        onDoubleClick={() => { if (isSavingFeatured || savingStatusProjectId !== null || isRefreshing || isLoggingOut) return; setStatusError(''); setEditingStatusProjectId(project.id) }}
                                         onKeyDown={(event) => {
                                           if (event.key === 'Enter' || event.key === ' ') {
                                             event.preventDefault()
+                                            if (isSavingFeatured || savingStatusProjectId !== null || isRefreshing || isLoggingOut) return
                                             setStatusError('')
                                             setEditingStatusProjectId(project.id)
                                           }
@@ -451,10 +467,10 @@ export function AdminPage() {
                                 </td>
                                 <td data-label={copy.order}>{project.sortOrder}</td>
                                 <td data-label={copy.actions} className="admin-projects__row-actions">
-                                  {project.status === 'published' && <button className="admin-projects__text-action" type="button" onClick={() => updateFeatured(project.id, !project.isFeatured)}>
+                                  {project.status === 'published' && <button className="admin-projects__text-action" type="button" onClick={() => updateFeatured(project.id, !project.isFeatured)} disabled={isSavingFeatured || savingStatusProjectId !== null || isRefreshing || isLoggingOut}>
                                     {project.isFeatured ? copy.removeFeatured : copy.addFeatured}
                                   </button>}
-                                  <button className="admin-projects__edit" type="button" onClick={() => openProjectEditor(project.id)}>{copy.edit}</button>
+                                  <button className="admin-projects__edit" type="button" onClick={() => openProjectEditor(project.id)} disabled={isSavingFeatured || savingStatusProjectId !== null || isRefreshing || isLoggingOut}>{copy.edit}</button>
                                 </td>
                               </tr>
                             ))}

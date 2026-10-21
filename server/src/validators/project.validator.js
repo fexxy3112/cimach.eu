@@ -98,6 +98,14 @@ export function validateProjectUpdate(req, res, next) {
   return validateProjectPayload(req, res, next)
 }
 
+export function validateProjectStatus(req, res, next) {
+  if (!isProjectStatus(req.body?.status)) {
+    return res.status(422).json({ error: 'validation_failed', fields: { status: 'invalid' } })
+  }
+  req.validatedProjectStatus = req.body.status
+  return next()
+}
+
 export function validateProjectCreate(req, res, next) {
   return validateProjectPayload(req, res, next, { requireSortOrder: false })
 }

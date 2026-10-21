@@ -102,6 +102,17 @@
   text-transform: uppercase
 }
 
+.admin-project-editor fieldset.admin-project-editor__controls {
+  display: block;
+  padding: 0;
+  border: 0;
+}
+
+.admin-project-editor button:disabled,
+.admin-project-editor input:disabled {
+  cursor: wait;
+}
+
 .admin-project-editor__gallery {
   display: grid;
   gap: 16px;

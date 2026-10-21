@@ -20,6 +20,7 @@ export type PublicProjectDetail = PublicProject & {
 
 export type PublicProjectCatalogData = {
   kind: 'catalog'
+  scope?: 'featured' | 'all'
   locale: Locale
   projects: PublicProject[]
 }
@@ -55,7 +56,7 @@ export async function loadPublicProjectCatalog(
   const url = apiUrl(apiBase, `/projects?locale=${locale}`)
   const response = await fetcher(url, { signal })
   const { projects } = await readJson<ProjectListResponse>(response, url)
-  return { kind: 'catalog', locale, projects }
+  return { kind: 'catalog', scope: 'featured', locale, projects }
 }
 
 export async function loadAllPublicProjectCatalog(
@@ -67,7 +68,7 @@ export async function loadAllPublicProjectCatalog(
   const url = apiUrl(apiBase, `/projects?locale=${locale}&scope=all`)
   const response = await fetcher(url, { signal })
   const { projects } = await readJson<ProjectListResponse>(response, url)
-  return { kind: 'catalog', locale, projects }
+  return { kind: 'catalog', scope: 'all', locale, projects }
 }
 
 export async function loadPublicProjectPage(

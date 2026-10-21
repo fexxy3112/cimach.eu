@@ -18,7 +18,7 @@ export function SiteHeader({ activePage, projectSlug, projectLocales }: {
   const homePath = `/${locale}/`
   const languagePath = (nextLocale: 'pl' | 'en') => activePage === 'project' && projectSlug && projectLocales?.includes(nextLocale)
     ? `/${nextLocale}/projects/${projectSlug}/`
-    : `/${nextLocale}/`
+    : activePage === 'projects' ? `/${nextLocale}/projects/` : `/${nextLocale}/`
   const copy = locale === 'pl'
     ? { nav: ['Projekty', 'O mnie', 'Fotografia', 'Kontakt'], admin: 'Panel zarządzania', navLabel: 'Nawigacja główna', theme: 'Zmień motyw', close: 'Zamknij menu', open: 'Otwórz menu', switchLanguage: 'Zmień język' }
     : { nav: ['Work', 'About', 'Photography', 'Contact'], admin: 'Admin panel', navLabel: 'Main navigation', theme: 'Toggle theme', close: 'Close menu', open: 'Open menu', switchLanguage: 'Change language' }

@@ -42,7 +42,7 @@ function prerenderPages() {
         }
 
         for (const locale of ['pl', 'en']) {
-          const pages = [{ name: 'home' }]
+          const pages = [{ name: 'home' }, { name: 'projects' }]
           for (const project of allCatalogs[locale].projects) {
             const slug = project.caseStudySlug
             if (!slug) continue
@@ -61,7 +61,7 @@ function prerenderPages() {
           for (const route of pages) {
             const pageName = route.name
             const project = route.project
-            const pageData = pageName === 'home' ? catalogs[locale] : route.projectPage
+            const pageData = pageName === 'home' ? catalogs[locale] : pageName === 'projects' ? allCatalogs[locale] : route.projectPage
             const projectLocales = route.projectPage?.availableLocales
             const page = getSeo(locale, pageName, project, route.slug, projectLocales)
             const isHome = pageName === 'home'
@@ -76,7 +76,13 @@ function prerenderPages() {
                   jobTitle: 'Web developer',
                   sameAs: ['https://github.com/fexxy3112', 'https://www.instagram.com/_cimach_/'],
                 }
-              : {
+              : pageName === 'projects' ? {
+                  '@context': 'https://schema.org',
+                  '@type': 'CollectionPage',
+                  name: page.title,
+                  url: page.canonical,
+                  description: page.description,
+                } : {
                   '@context': 'https://schema.org',
                   '@type': 'CreativeWork',
                   name: project.name,

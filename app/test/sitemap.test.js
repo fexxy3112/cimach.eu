@@ -37,6 +37,8 @@ test('generates canonical and hreflang entries from published locale catalogs', 
   const sitemap = generateSitemap(catalogs, getSeo)
   assert.match(sitemap, /<loc>https:\/\/cimach\.eu\/pl\/<\/loc>/)
   assert.match(sitemap, /<loc>https:\/\/cimach\.eu\/en\/<\/loc>/)
+  assert.ok(sitemap.includes('<loc>https://cimach.eu/pl/projects/</loc>'))
+  assert.ok(sitemap.includes('<loc>https://cimach.eu/en/projects/</loc>'))
   for (const path of [
     '/pl/projects/cimach-eu/', '/en/projects/cimach-eu/',
     '/pl/projects/studio-bodyart/', '/en/projects/studio-bodyart/',

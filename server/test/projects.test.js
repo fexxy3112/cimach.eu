@@ -3,6 +3,10 @@ import { test } from 'node:test'
 import bcrypt from 'bcryptjs'
 import jwt from 'jsonwebtoken'
 import { randomUUID } from 'node:crypto'
+import { mkdtemp, readFile, rm, stat } from 'node:fs/promises'
+import sharp from 'sharp'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { createApp } from '../src/app.js'
 
 const origin = 'http://localhost:5173'
@@ -80,6 +84,9 @@ function fakePool(role = 'admin') {
         release() { this.statements.push('RELEASE') },
         async execute(sql, values = []) {
           this.statements.push(sql)
+          if (sql.includes('GET_LOCK')) return [[{ acquired: 1 }], []]
+          if (sql.includes('RELEASE_LOCK')) return [[{ released: 1 }], []]
+          if (sql.includes('UNION ALL SELECT project_id')) return [[], []]
           if (sql.includes('MAX(CAST(display_number AS UNSIGNED))')) return [[{ nextNumber: 5 }], []]
           if (sql.includes('MAX(sort_order)')) return [[{ nextOrder: 3 }], []]
           if (sql.includes('INSERT INTO projects')) {
@@ -149,9 +156,11 @@ function otherProjectRow(locale) {
 
 async function startApi(t, role = 'admin') {
   const pool = fakePool(role)
+  const uploadDir = await mkdtemp(join(tmpdir(), 'cimach-project-api-'))
+  t.after(() => rm(uploadDir, { recursive: true, force: true }))
   const app = await createApp({
     pool,
-    config,
+    config: { ...config, uploadDir },
     dummyPasswordHash: await bcrypt.hash('test-only-dummy-password', 4),
   })
   const server = app.listen(0, '127.0.0.1')
@@ -165,6 +174,7 @@ async function startApi(t, role = 'admin') {
     base: `http://127.0.0.1:${server.address().port}`,
     cookie: `cimach_admin=${token}`,
     pool,
+    uploadDir,
   }
 }
 
@@ -255,6 +265,30 @@ async function postJson(base, path, body, cookie) {
   })
 }
 
+test('inline status endpoint enforces session, admin role, CSRF and status validation', async (t) => {
+  const admin = await startApi(t)
+  const path = '/api/admin/projects/7/status'
+  assert.equal((await putJson(admin.base, path, { status: 'draft' })).status, 401)
+  const editor = await startApi(t, 'editor')
+  assert.equal((await putJson(editor.base, path, { status: 'draft' }, editor.cookie)).status, 403)
+  assert.equal((await fetch(`${admin.base}${path}`, {
+    method: 'PUT', headers: { Cookie: admin.cookie, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ status: 'draft' }),
+  })).status, 403)
+  assert.equal((await putJson(admin.base, path, { status: 'archived' }, admin.cookie)).status, 422)
+  const originalExecute = admin.pool.execute.bind(admin.pool)
+  admin.pool.execute = async (sql, values) => {
+    if (sql.startsWith('UPDATE projects SET status')) {
+      assert.deepEqual(values, ['draft', 'draft', 'draft', 'draft', '7'])
+      return [{ affectedRows: 1 }]
+    }
+    return originalExecute(sql, values)
+  }
+  const response = await putJson(admin.base, path, { status: 'draft' }, admin.cookie)
+  assert.equal(response.status, 200)
+  assert.deepEqual(await response.json(), { status: 'draft' })
+})
+
 function createPayload(overrides = {}) {
   return {
     slug: 'new-project',
@@ -271,6 +305,41 @@ function createPayload(overrides = {}) {
   }
 }
 
+test('image upload and discard require admin and CSRF, optimize images and remove temporary files', async (t) => {
+  const admin = await startApi(t)
+  const editor = await startApi(t, 'editor')
+  const png = await sharp({ create: { width: 600, height: 900, channels: 3, background: '#668844' } }).png().toBuffer()
+  const upload = (base, cookie, csrf = true) => {
+    const form = new FormData()
+    form.append('image', new Blob([png], { type: 'image/png' }), 'portrait.png')
+    return fetch(`${base}/api/admin/uploads`, {
+      method: 'POST', headers: { ...(cookie ? { Cookie: cookie } : {}), ...(csrf ? { Origin: origin, 'X-CIMACH-CSRF': '1' } : {}) }, body: form,
+    })
+  }
+  assert.equal((await upload(admin.base)).status, 401)
+  assert.equal((await upload(editor.base, editor.cookie)).status, 403)
+  assert.equal((await upload(admin.base, admin.cookie, false)).status, 403)
+  const response = await upload(admin.base, admin.cookie)
+  assert.equal(response.status, 201)
+  const image = await response.json()
+  assert.match(image.url, /^\/api\/uploads\/[a-f0-9]{40}\.webp$/)
+  assert.equal(image.width, 600)
+  assert.equal(image.height, 900)
+  assert.equal(image.contentType, 'image/webp')
+  const path = join(admin.uploadDir, image.url.split('/').at(-1))
+  const metadata = await sharp(await readFile(path)).metadata()
+  assert.equal(metadata.format, 'webp')
+  assert.equal(metadata.width / metadata.height, 2 / 3)
+  assert.equal((await fetch(`${admin.base}${image.url}`)).status, 200)
+  const discardPath = '/api/admin/uploads/discard'
+  assert.equal((await postJson(admin.base, discardPath, { urls: [image.url] })).status, 401)
+  assert.equal((await postJson(editor.base, discardPath, { urls: [image.url] }, editor.cookie)).status, 403)
+  const discarded = await postJson(admin.base, discardPath, { urls: [image.url] }, admin.cookie)
+  assert.equal(discarded.status, 200)
+  assert.deepEqual(await discarded.json(), { removed: 1 })
+  await assert.rejects(stat(path), { code: 'ENOENT' })
+})
+
 test('creating a project requires an admin and saves its translations, technologies and gallery transactionally', async (t) => {
   const admin = await startApi(t)
   const path = '/api/admin/projects'
@@ -280,12 +349,12 @@ test('creating a project requires an admin and saves its translations, technolog
   assert.equal(response.status, 201)
   assert.deepEqual(await response.json(), { project: { id: '10' } })
   assert.deepEqual(admin.pool.lastConnection.createdProjectValues, [
-    '05', 'new-project', 'https://example.com/project', null, 'draft', 4, 'draft',
+    '05', 'new-project', 'https://example.com/project', null, null, null, 'draft', 3, 'draft',
   ])
   assert.equal(admin.pool.lastConnection.statements.filter((sql) => sql.includes('INSERT INTO project_translations')).length, 2)
   assert.equal(admin.pool.lastConnection.statements.filter((sql) => sql.includes('INSERT INTO project_technologies')).length, 2)
   assert.equal(admin.pool.lastConnection.statements.filter((sql) => sql.includes('INSERT INTO project_images')).length, 1)
-  assert.equal(admin.pool.lastConnection.statements.at(-2), 'COMMIT')
+  assert.ok(admin.pool.lastConnection.statements.includes('COMMIT'))
 
   assert.equal((await postJson(admin.base, path, createPayload({ slug: 'INVALID slug' }), admin.cookie)).status, 422)
   assert.equal((await postJson(admin.base, path, createPayload({ slug: 'duplicate-slug' }), admin.cookie)).status, 409)
@@ -298,7 +367,7 @@ test('project editing is admin-only, validates bilingual data and keeps unchange
   const admin = await startApi(t)
   assert.equal((await putJson(admin.base, '/api/admin/projects/7', editPayload())).status, 401)
   assert.equal((await putJson(admin.base, '/api/admin/projects/7', editPayload(), admin.cookie)).status, 200)
-  assert.equal(admin.pool.lastConnection.statements.at(-2), 'COMMIT')
+  assert.ok(admin.pool.lastConnection.statements.includes('COMMIT'))
   assert.equal(admin.pool.lastConnection.statements.some((sql) => sql.includes('DELETE FROM project_images')), false)
 
   const missingTranslation = editPayload({ translations: { pl: editPayload().translations.pl } })

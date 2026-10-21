@@ -12,6 +12,7 @@
     "projects:snapshot": "node scripts/refresh-project-snapshot.js",
     "projects:import": "node scripts/import-projects.js",
     "admin:create": "node scripts/create-admin.js",
+    "uploads:cleanup": "node scripts/cleanup-uploads.js",
     "test": "node --test"
   },
   "dependencies": {
